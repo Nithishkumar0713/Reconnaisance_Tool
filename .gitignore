@@ -1,0 +1,31 @@
+# Python environment and bytecode
+backend/venv/
+backend/.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Node environment and modules
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Application configuration & keys
+backend/.env
+
+# Logs and transient files
+*.log
+.system_generated/
+backend/temp_harvester_*.json
+backend/temp_harvester_*.xml
+backend/pip_out.txt
+/task.md
+/walkthrough.md
+/implementation_plan.md
+/scratch/
+
+# OS metadata
+.DS_Store
+Thumbs.db

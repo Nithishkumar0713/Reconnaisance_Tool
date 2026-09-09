@@ -1,0 +1,240 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body, input, button, select, textarea {
+  font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6, .font-heading {
+  font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+}
+
+body {
+  background: linear-gradient(to top right, #bae6fd, #e0f2fe, #ccfbf1);
+  background-attachment: fixed;
+  color: #0f172a;
+  margin: 0;
+}
+
+/* Cool theme custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #e2e8f0;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.mono {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Pulse animation for active loader */
+@keyframes pulse-teal {
+  0%, 100% {
+    opacity: 1;
+    text-shadow: 0 0 8px rgba(13, 148, 136, 0.3);
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.pulse-teal {
+  animation: pulse-teal 2s ease-in-out infinite;
+}
+
+/* Sequential fade-in list animation */
+@keyframes fade-in-up {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Soft paper-like card containers */
+.natural-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03), 0 10px 40px rgba(15, 23, 42, 0.015);
+}
+
+.natural-card-hover:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
+  transition: all 0.25s ease-in-out;
+}
+
+.glow-sage {
+  box-shadow: 0 0 15px rgba(13, 148, 136, 0.08);
+}
+
+.glow-red {
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.08);
+}
+
+.glow-amber {
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.08);
+}
+
+/* Shake animation — used for captcha wrong-answer feedback */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-7px); }
+  40%       { transform: translateX(7px); }
+  60%       { transform: translateX(-4px); }
+  80%       { transform: translateX(4px); }
+}
+
+/* Animation delays */
+.delay-1 { animation-delay: 40ms; }
+.delay-2 { animation-delay: 80ms; }
+.delay-3 { animation-delay: 120ms; }
+.delay-4 { animation-delay: 160ms; }
+.delay-5 { animation-delay: 200ms; }
+.delay-6 { animation-delay: 240ms; }
+.delay-7 { animation-delay: 280ms; }
+.delay-8 { animation-delay: 320ms; }
+.delay-9 { animation-delay: 360ms; }
+.delay-10 { animation-delay: 400ms; }
+
+/* Elegant custom caret color and thin font family */
+input, textarea {
+  caret-color: #000000;
+  font-family: 'Outfit', system-ui, -apple-system, sans-serif !important;
+}
+
+/* ---------- Landing page cinematic intro sequence ---------- */
+/* Choreography: world map zooms/fades in with a scanning sweep line
+   passing over it, then the title resolves in letter-by-letter (as if
+   coming into focus), then the tagline, then the logo badge pops in with
+   a glow ring, then the CTA button and footer settle in. Every stage uses
+   `animation-fill-mode: both` so it stays invisible during its own delay
+   instead of flashing full-opacity before its cue. */
+
+@keyframes map-zoom-in {
+  0%   { opacity: 0; transform: scale(1.15); }
+  100% { opacity: 0.18; transform: scale(1); }
+}
+/* Continues where map-zoom-in leaves off (same scale(1)/translate(0) start
+   state, so there's no jump at the handoff) with a slow ongoing drift for
+   the rest of the intro, so the map keeps feeling alive instead of
+   freezing the instant the initial zoom settles. Two separate keyframe
+   animations chained on the same element (rather than one longer keyframe)
+   so each phase gets its own easing curve — a single eased keyframe
+   spanning both phases would apply the fast-in/slow-out curve tuned for
+   the quick zoom to the whole 2.7s, flattening the drift to almost nothing. */
+@keyframes map-drift {
+  0%   { transform: scale(1) translate(0%, 0%); }
+  100% { transform: scale(1.06) translate(-1.4%, -1%); }
+}
+.anim-map {
+  animation:
+    map-zoom-in 0.75s cubic-bezier(0.16, 1, 0.3, 1) both,
+    map-drift 1.95s ease-in-out 0.75s both;
+}
+
+/* Small glowing "node detected" blips scattered over the map, popping in
+   on a stagger across the intro — reinforces the scanning/recon theme
+   alongside the sweep line, like nodes being discovered one at a time. */
+@keyframes node-blip {
+  0%   { opacity: 0; transform: scale(0); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
+  55%  { opacity: 1; transform: scale(1.7); box-shadow: 0 0 10px 4px rgba(239, 68, 68, 0.5); }
+  100% { opacity: 0.85; transform: scale(1); box-shadow: 0 0 4px 1px rgba(239, 68, 68, 0.35); }
+}
+.map-node {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: #ef4444;
+  animation: node-blip 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* A single glowing scan-line sweeping top-to-bottom over the map once,
+   like the tool "scanning" the world before the page reveals itself.
+   Animates `background-position-y` rather than `transform: translateY()` —
+   a transform percentage is relative to the *element's own* box, so on a
+   full-height element that would barely move the visible band at all;
+   background-position on a fixed-size background band sweeps the full
+   container height correctly. */
+@keyframes scan-sweep {
+  0%   { background-position-y: -20%; opacity: 0; }
+  15%  { opacity: 0.8; }
+  85%  { opacity: 0.8; }
+  100% { background-position-y: 120%; opacity: 0; }
+}
+.anim-scanline {
+  position: absolute;
+  inset: 0;
+  /* Slowed down from an earlier 0.8s — at that speed it read as a quick
+     flash rather than a visible sweep. 2.1s stretches it across nearly the
+     whole ~2.7s intro so it's clearly a deliberate top-to-bottom pass. */
+  animation: scan-sweep 2.1s ease-in-out 0.15s both;
+  background-image: linear-gradient(to bottom, transparent, rgba(45, 212, 191, 0.35) 45%, rgba(249, 115, 22, 0.35) 55%, transparent);
+  background-size: 100% 18%;
+  background-repeat: no-repeat;
+}
+
+@keyframes letter-in {
+  0%   { opacity: 0; transform: translateY(10px); filter: blur(4px); }
+  100% { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+.anim-letter {
+  display: inline-block;
+  animation: letter-in 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes logo-pop {
+  0%   { opacity: 0; transform: scale(0.3) rotate(-20deg); }
+  60%  { opacity: 1; transform: scale(1.15) rotate(6deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+.anim-logo {
+  animation: logo-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Expanding glow ring behind the logo badge, timed with its pop-in. */
+@keyframes ring-pulse {
+  0%   { opacity: 0.55; transform: scale(0.7); }
+  100% { opacity: 0; transform: scale(1.9); }
+}
+.anim-ring {
+  animation: ring-pulse 0.65s ease-out both;
+}
+
+.anim-fade-up {
+  animation: fade-in-up 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-map, .anim-scanline, .anim-letter, .anim-logo, .anim-ring, .anim-fade-up {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+  .anim-map { opacity: 0.18 !important; }
+  .anim-scanline { display: none !important; }
+}
