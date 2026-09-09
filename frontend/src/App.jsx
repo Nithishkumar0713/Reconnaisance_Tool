@@ -764,6 +764,7 @@ export default function App() {
               setSelectedModule(item.module)
               setBatchId(null)
               setBatchStatus('idle')
+              setCurrentScanId(null)
               setShowHistoryModal(false)
             } else {
               setScanData(item.data)
@@ -771,6 +772,20 @@ export default function App() {
               setSelectedModule(null)
               setBatchId(null)
               setBatchStatus('idle')
+              // item.id is the real ScanHistory row id (always present, from
+              // the top-level history record) — item.data.scan_id is NOT
+              // reliable here: it's only added to the in-memory result after
+              // it's already been serialized into result_json on the backend,
+              // so a scan re-opened from History always has it missing. That
+              // gap was silently masked by a `|| 1` fallback further down
+              // (scanId={currentScanId || scanData.scan_id || scanData.id || 1}),
+              // which meant re-opening any scan from History and then
+              // clicking "Scan Subdomains" attached the new batch to
+              // whatever scan happened to have database id 1 — observed
+              // directly: a real 145-subdomain batch got attached to a
+              // different user's month-old scan and became invisible in
+              // history. Setting it correctly here fixes it at the source.
+              setCurrentScanId(item.id)
               setShowHistoryModal(false)
             }
           }}
@@ -786,8 +801,10 @@ export default function App() {
             const uniqueSubdomains = Array.from(new Set(resolvedSubs.map(s => s.subdomain)))
             const uniqueCount = uniqueSubdomains.length
 
+            const resolvedScanId = currentScanId || scanData.scan_id || scanData.id
+
             console.log('Modal rendering with:', {
-              scanId: currentScanId || scanData.scan_id || scanData.id,
+              scanId: resolvedScanId,
               totalSubdomains: allSubs.length,
               resolvedSubdomains: resolvedSubs.length,
               uniqueSubdomains: uniqueCount,
@@ -811,9 +828,26 @@ export default function App() {
               )
             }
 
+            if (!resolvedScanId) {
+              return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                  <div className="bg-white rounded-xl p-8 max-w-md shadow-2xl">
+                    <p className="text-red-600 font-bold mb-4">Error: Can't identify this scan</p>
+                    <p className="text-slate-600 text-sm mb-4">This scan result isn't linked to a saved scan record, so a subdomain batch can't be attached to it. Try running a fresh scan and starting the batch from there.</p>
+                    <button
+                      onClick={() => setShowBatchModal(false)}
+                      className="w-full px-4 py-2 bg-teal-600 text-white rounded-lg font-bold"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              )
+            }
+
             return (
               <StartBatchScanModal
-                scanId={currentScanId || scanData.scan_id || scanData.id || 1}
+                scanId={resolvedScanId}
                 subdomains={resolvedSubs}
                 scanMode={scanData.scan_mode || 'detailed'}
                 onStart={(newBatchId) => {

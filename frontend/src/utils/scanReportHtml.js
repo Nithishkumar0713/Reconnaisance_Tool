@@ -1,14 +1,19 @@
 
 export const SCAN_REPORT_STYLES = `
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+        * { box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+            -webkit-font-smoothing: antialiased;
             line-height: 1.5;
-            color: #1e293b;
+            color: #0f172a;
             background: linear-gradient(to top right, #bae6fd, #e0f2fe, #ccfbf1);
             background-attachment: fixed;
             margin: 0;
             padding: 40px 20px;
         }
+        h1, h2, h3, h4, h5, h6 { font-family: 'Outfit', system-ui, sans-serif; }
         .container {
             max-width: 1180px;
             margin: 0 auto;
@@ -17,8 +22,8 @@ export const SCAN_REPORT_STYLES = `
             background: linear-gradient(135deg, #0d9488 0%, #06b6d4 100%);
             color: #ffffff;
             padding: 40px 35px;
-            border-radius: 20px;
-            margin-bottom: 40px;
+            border-radius: 24px;
+            margin-bottom: 32px;
             box-shadow: 0 20px 35px -5px rgba(13, 148, 136, 0.3), 0 10px 15px -3px rgba(13, 148, 136, 0.2);
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
@@ -60,10 +65,55 @@ export const SCAN_REPORT_STYLES = `
             font-weight: 700;
             margin-top: 4px;
         }
+
+        /* "Diagnostics Panel" target header — matches the app's own live panel */
+        .target-panel {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 20px;
+            padding: 24px 28px;
+            margin-bottom: 28px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03), 0 10px 40px rgba(15, 23, 42, 0.04);
+        }
+        .target-panel-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #94a3b8;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .target-panel-name {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 22px;
+            font-weight: 700;
+            color: #0f172a;
+            margin: 0 0 10px 0;
+            word-break: break-all;
+        }
+        .target-panel-meta {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: #64748b;
+            font-weight: 600;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px;
+        }
+        .target-panel-meta .sep { color: #cbd5e1; }
+        .target-panel-meta .mode-tag {
+            color: #0d9488;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
         .card {
             background: #ffffff;
             border: 1px solid #e2e8f0;
-            border-radius: 16px;
+            border-radius: 20px;
             padding: 28px;
             margin-bottom: 24px;
             box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03), 0 10px 30px rgba(15, 23, 42, 0.04);
@@ -73,16 +123,14 @@ export const SCAN_REPORT_STYLES = `
             align-items: center;
             justify-content: space-between;
             border-bottom: 1px solid #f1f5f9;
-            background: linear-gradient(90deg, #f0fdfa 0%, #ffffff 100%);
-            margin: -28px -28px 24px -28px;
-            padding: 18px 28px;
-            border-radius: 16px 16px 0 0;
+            margin: 0 0 20px 0;
+            padding: 0 0 18px 0;
         }
         .card-title {
-            font-size: 14px;
+            font-size: 13px;
             text-transform: uppercase;
-            letter-spacing: 1.5px;
-            font-weight: 900;
+            letter-spacing: 1px;
+            font-weight: 800;
             margin: 0;
             color: #0f172a;
             display: flex;
@@ -90,11 +138,11 @@ export const SCAN_REPORT_STYLES = `
             gap: 10px;
         }
         .status-badge {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-family: 'Outfit', sans-serif;
             font-size: 10px;
             font-weight: 800;
             padding: 5px 11px;
-            border-radius: 8px;
+            border-radius: 999px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             display: inline-block;
@@ -125,43 +173,42 @@ export const SCAN_REPORT_STYLES = `
             width: 100%;
             border-collapse: collapse;
             margin-top: 15px;
-            border-radius: 10px;
+            border-radius: 12px;
             overflow: hidden;
             border: 1px solid #e2e8f0;
         }
         th, td {
             padding: 12px 16px;
             text-align: left;
-            border-bottom: 1px solid #e2e8f0;
+            border-bottom: 1px solid #f1f5f9;
             font-size: 13px;
         }
         th {
-            background: #0d9488;
-            color: #ffffff;
+            background: #f8fafc;
+            color: #64748b;
             font-weight: 800;
-            font-size: 11px;
+            font-size: 10px;
             text-transform: uppercase;
             letter-spacing: 1px;
-            border-bottom: none;
+            border-bottom: 1px solid #e2e8f0;
         }
-        tr:hover {
-            background-color: #f0fdfa;
-        }
-        tbody tr:nth-child(even) {
+        tbody tr:hover {
             background-color: #f8fafc;
         }
         .mono {
-            font-family: Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace;
+            font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
         }
         .tag {
             display: inline-block;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
             background-color: #f8fafc;
             border: 1px solid #e2e8f0;
             color: #334155;
             padding: 4px 10px;
-            border-radius: 8px;
+            border-radius: 999px;
             margin: 3px 3px;
         }
         .tag-teal {
@@ -215,6 +262,139 @@ export const SCAN_REPORT_STYLES = `
             padding: 8px 12px;
             border-radius: 8px;
         }
+
+        /* Colorful stat tiles — matches the app's own summary tile grids
+           (e.g. Email Harvesting's Total/Employee/Role/Leaked cards) */
+        .stat-tile-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+        .stat-tile {
+            border-radius: 14px;
+            padding: 14px;
+            text-align: center;
+            border: 1px solid;
+        }
+        .stat-tile .st-label {
+            font-size: 9px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+        }
+        .stat-tile .st-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 24px;
+            font-weight: 800;
+        }
+        .stat-tile .st-sub {
+            font-size: 9px;
+            font-weight: 600;
+            margin-top: 3px;
+            opacity: .85;
+        }
+        .stat-violet { background: #f5f3ff; border-color: #ddd6fe; } .stat-violet .st-label { color: #7c3aed; } .stat-violet .st-value { color: #6d28d9; } .stat-violet .st-sub { color: #8b5cf6; }
+        .stat-blue   { background: #eff6ff; border-color: #bfdbfe; } .stat-blue .st-label { color: #2563eb; } .stat-blue .st-value { color: #1d4ed8; } .stat-blue .st-sub { color: #3b82f6; }
+        .stat-teal   { background: #f0fdfa; border-color: #99f6e4; } .stat-teal .st-label { color: #0d9488; } .stat-teal .st-value { color: #0f766e; } .stat-teal .st-sub { color: #14b8a6; }
+        .stat-rose   { background: #fff1f2; border-color: #fecdd3; } .stat-rose .st-label { color: #e11d48; } .stat-rose .st-value { color: #be123c; } .stat-rose .st-sub { color: #f43f5e; }
+        .stat-emerald{ background: #ecfdf5; border-color: #a7f3d0; } .stat-emerald .st-label { color: #059669; } .stat-emerald .st-value { color: #047857; } .stat-emerald .st-sub { color: #10b981; }
+        .stat-amber  { background: #fffbeb; border-color: #fde68a; } .stat-amber .st-label { color: #b45309; } .stat-amber .st-value { color: #92400e; } .stat-amber .st-sub { color: #d97706; }
+        .stat-slate  { background: #f8fafc; border-color: #e2e8f0; } .stat-slate .st-label { color: #475569; } .stat-slate .st-value { color: #1e293b; } .stat-slate .st-sub { color: #64748b; }
+        .stat-red    { background: #fef2f2; border-color: #fecaca; } .stat-red .st-label { color: #dc2626; } .stat-red .st-value { color: #b91c1c; } .stat-red .st-sub { color: #ef4444; }
+
+        /* Pill filter tabs (Email Harvesting "Show All / Employee / Role / Leaked") */
+        .pill-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 8px;
+            margin-bottom: 16px;
+        }
+        .pill-tab {
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            color: #475569;
+        }
+        .pill-tab.active {
+            background: #4f46e5;
+            border-color: #4f46e5;
+            color: #ffffff;
+        }
+
+        /* Row-list — a softer alternative to bordered <table> for dense
+           lists (matches the app's own divide-y row lists) */
+        .row-list {
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            overflow: hidden;
+        }
+        .row-list-header {
+            display: grid;
+            background: #f1f5f9;
+            padding: 10px 16px;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: #64748b;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .row-list-row {
+            display: grid;
+            align-items: center;
+            padding: 11px 16px;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 12px;
+        }
+        .row-list-row:last-child { border-bottom: none; }
+        .row-list-row:hover { background: #f8fafc; }
+        .badge-pill {
+            display: inline-block;
+            font-size: 9px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 3px 9px;
+            border-radius: 999px;
+        }
+        .source-chip {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 3px 9px;
+            border-radius: 8px;
+            border: 1px solid;
+            margin: 2px;
+        }
+
+        /* Sidebar per-module accent colors — mirrors the app's own
+           per-nav-item color coding rather than a single flat teal */
+        .sidebar-btn.active[data-color="teal"]    { background: #f0fdfa; border-color: #99f6e4; color: #0f766e; }
+        .sidebar-btn.active[data-color="blue"]    { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+        .sidebar-btn.active[data-color="slate"]   { background: #f1f5f9; border-color: #e2e8f0; color: #334155; }
+        .sidebar-btn.active[data-color="amber"]   { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+        .sidebar-btn.active[data-color="cyan"]    { background: #ecfeff; border-color: #a5f3fc; color: #0e7490; }
+        .sidebar-btn.active[data-color="indigo"]  { background: #eef2ff; border-color: #c7d2fe; color: #4338ca; }
+        .sidebar-btn.active[data-color="red"]     { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+        .sidebar-btn.active[data-color="emerald"] { background: #ecfdf5; border-color: #a7f3d0; color: #047857; }
+        .sidebar-btn.active[data-color="violet"]  { background: #f5f3ff; border-color: #ddd6fe; color: #6d28d9; }
+        .sidebar-btn.active[data-color="orange"]  { background: #fff7ed; border-color: #fed7aa; color: #c2410c; }
+        .sidebar-btn.active[data-color="rose"]    { background: #fff1f2; border-color: #fecdd3; color: #be123c; }
+        .sidebar-btn.active[data-color="purple"]  { background: #faf5ff; border-color: #e9d5ff; color: #7e22ce; }
+        .sidebar-btn.active[data-color="sky"]     { background: #f0f9ff; border-color: #bae6fd; color: #0369a1; }
+        .sidebar-btn.active[data-color="fuchsia"] { background: #fdf4ff; border-color: #f5d0fe; color: #a21caf; }
+
         @media (max-width: 768px) {
             .grid-2 { grid-template-columns: 1fr; }
         }
@@ -426,6 +606,173 @@ export function moduleStatusBadge(mod) {
   return '<span class="status-badge ok">OK</span>'
 }
 
+// Mirrors EmailGatherSection's SOURCE_COLORS/SOURCE_LABELS in Results.jsx —
+// kept in sync by hand since a static HTML export can't import the
+// component directly.
+const _EMAIL_SOURCE_COLORS = {
+  crt_sh: '#3b82f6', pgp_keyserver: '#8b5cf6', ubuntu_pgp: '#a855f7', mit_pgp: '#6366f1',
+  wayback_machine: '#f59e0b', wayback_docs: '#d97706', web_crawl: '#10b981', dns_txt_dmarc: '#06b6d4',
+  subdomain_dns: '#0284c7', github_search: '#1d4ed8', bing_search: '#eab308', commoncrawl: '#7c3aed',
+  alienvault_otx: '#ec4899', threatminer: '#ef4444', urlscan: '#f97316', certspotter: '#14b8a6',
+  keybase: '#3b82f6', email_format: '#0284c7', skymem: '#6366f1', smtp_banner: '#64748b',
+  ahmia_darkweb: '#dc2626', paste_dumps: '#ea580c', leakix: '#b91c1c', forum_registrations: '#4f46e5',
+  gitlab_search: '#fc6d26', duckduckgo_search: '#de5833', qwant_search: '#0055ff',
+  bitbucket_gitee: '#2563eb', cloud_storage_buckets: '#0284c7', database_backups: '#b91c1c',
+}
+const _EMAIL_SOURCE_LABELS = {
+  crt_sh: 'crt.sh', pgp_keyserver: 'OpenPGP', ubuntu_pgp: 'Ubuntu PGP', mit_pgp: 'MIT PGP',
+  wayback_machine: 'Wayback', wayback_docs: 'Wayback Docs', web_crawl: 'Web Crawl', dns_txt_dmarc: 'DNS/DMARC',
+  subdomain_dns: 'Subdomain DNS', github_search: 'GitHub', bing_search: 'Bing', commoncrawl: 'CommonCrawl',
+  alienvault_otx: 'AlienVault OTX', threatminer: 'ThreatMiner', urlscan: 'URLScan', certspotter: 'CertSpotter',
+  keybase: 'Keybase', email_format: 'Email-Format', skymem: 'Skymem', smtp_banner: 'SMTP Banner',
+  ahmia_darkweb: 'Ahmia Darkweb', paste_dumps: 'Paste Dumps', leakix: 'LeakIX', forum_registrations: 'Forums & Events',
+  gitlab_search: 'GitLab', duckduckgo_search: 'DuckDuckGo', qwant_search: 'Qwant',
+  bitbucket_gitee: 'Bitbucket/Gitee', cloud_storage_buckets: 'Cloud Buckets', database_backups: 'DB Backups',
+}
+
+function _portsCard(ports) {
+  if (!isModuleOk(ports)) return '<p class="fallback-text">No port scanning information was successfully collected.</p>'
+  const openPorts = ports.open_ports || []
+  const stats = `
+    <div class="stat-tile-grid">
+        <div class="stat-tile stat-slate"><div class="st-label">Scanned</div><div class="st-value">${ports.scanned_port_count || 0}</div></div>
+        <div class="stat-tile stat-emerald"><div class="st-label">Open</div><div class="st-value">${ports.open_port_count || 0}</div></div>
+        <div class="stat-tile stat-slate"><div class="st-label">Closed</div><div class="st-value">${ports.closed_port_count || 0}</div></div>
+        <div class="stat-tile stat-amber"><div class="st-label">Filtered</div><div class="st-value">${ports.filtered_port_count || 0}</div></div>
+    </div>
+  `
+  if (openPorts.length === 0) {
+    return stats + '<p class="fallback-text">No active listening services detected on the scanned ports.</p>'
+  }
+  return stats + `
+    <div class="row-list">
+        <div class="row-list-header" style="grid-template-columns: 1fr 2fr 1.5fr 2.5fr;">
+            <div>Port</div><div>Service</div><div>Version</div><div>Banner</div>
+        </div>
+        ${openPorts.map(p => `
+        <div class="row-list-row" style="grid-template-columns: 1fr 2fr 1.5fr 2.5fr;">
+            <div class="mono" style="font-weight: 700; color: #4338ca;">${p.port}</div>
+            <div style="font-weight: 600;">${p.service || 'unknown'}</div>
+            <div>${p.version ? `<span class="tag tag-teal">${p.version}</span>` : '<span style="color:#94a3b8;">—</span>'}</div>
+            <div class="mono" style="font-size: 11px; color: #64748b; word-break: break-all;">${p.banner || '—'}</div>
+        </div>
+        `).join('')}
+    </div>
+  `
+}
+
+function _directoryEnumCard(dirEnum) {
+  if (!isModuleOk(dirEnum)) return '<p class="fallback-text">Directory enumeration was not executed.</p>'
+  const found = dirEnum.found || []
+  const stats = `
+    <div class="stat-tile-grid">
+        <div class="stat-tile stat-slate"><div class="st-label">Paths Checked</div><div class="st-value">${dirEnum.paths_checked || 0}</div></div>
+        <div class="stat-tile stat-emerald"><div class="st-label">Found</div><div class="st-value">${found.length}</div></div>
+    </div>
+  `
+  if (found.length === 0) return stats + '<p class="fallback-text">No open directories/files were found.</p>'
+  const statusColor = (s) => s === 200 ? '#16a34a' : s === 403 ? '#dc2626' : (s >= 300 && s < 400) ? '#2563eb' : '#64748b'
+  return stats + `
+    <div class="row-list">
+        <div class="row-list-header" style="grid-template-columns: 0.7fr 3fr 1.3fr;">
+            <div>Status</div><div>Path & URL</div><div>Content Type</div>
+        </div>
+        ${found.map(p => `
+        <div class="row-list-row" style="grid-template-columns: 0.7fr 3fr 1.3fr;">
+            <div><span class="badge-pill" style="background: ${statusColor(p.status)}1a; color: ${statusColor(p.status)};">${p.status}</span></div>
+            <div class="mono" style="font-weight: 700; color: #0f172a; word-break: break-all;">
+                ${p.path}
+                ${p.url ? `<br><a href="${p.url}" target="_blank" style="font-size: 10px; color: #0284c7; font-weight: 500; text-decoration: none;">${p.url}</a>` : ''}
+            </div>
+            <div style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 600;">${p.content_type || '—'}</div>
+        </div>
+        `).join('')}
+    </div>
+  `
+}
+
+function _subdomainsCard(subdomains, isDomain) {
+  if (!isDomain) return '<p class="fallback-text" style="color: #64748b; font-style: italic;">Domain-specific scan skipped: Target is a direct IP address.</p>'
+  if (!isModuleOk(subdomains)) return '<p class="fallback-text">No subdomain enumeration was executed.</p>'
+  const list = subdomains.subdomains || []
+  const rawCount = Object.values(subdomains.sources || {}).reduce((acc, curr) => acc + (curr.count || 0), 0)
+  const stats = `
+    <div class="stat-tile-grid">
+        <div class="stat-tile stat-violet"><div class="st-label">Unique Subdomains</div><div class="st-value">${list.length}</div></div>
+        <div class="stat-tile stat-slate"><div class="st-label">Raw Matches</div><div class="st-value">${rawCount}</div><div class="st-sub">before dedup</div></div>
+    </div>
+  `
+  if (list.length === 0) return stats + '<p class="fallback-text">No subdomains were discovered.</p>'
+  return stats + `
+    <div class="row-list">
+        <div class="row-list-header" style="grid-template-columns: 2.5fr 1.5fr 1.5fr;">
+            <div>Subdomain</div><div>Resolved IP</div><div>Source</div>
+        </div>
+        ${list.map(s => `
+        <div class="row-list-row" style="grid-template-columns: 2.5fr 1.5fr 1.5fr;">
+            <div class="mono" style="font-weight: 700; color: #6d28d9; word-break: break-all;">${s.subdomain}</div>
+            <div class="mono">${s.ip ? `<span style="color:#15803d; font-weight:700;">${s.ip}</span>` : '<span style="color:#94a3b8;">—</span>'}</div>
+            <div><span class="badge-pill" style="background:#f5f3ff; color:#6d28d9;">${s.source || '—'}</span></div>
+        </div>
+        `).join('')}
+    </div>
+  `
+}
+
+function _emailHarvestingCard(emailData, isDomain) {
+  if (!isDomain) return '<p class="fallback-text" style="color: #64748b; font-style: italic;">Domain-specific scan skipped: Target is a direct IP address.</p>'
+  if (!isModuleOk(emailData)) return '<p class="fallback-text">Email harvesting was not executed.</p>'
+
+  const emails = emailData.emails || []
+  const employeeCount = emailData.employee_accounts_count ?? emails.filter(e => e.account_type === 'employee').length
+  const roleCount = emailData.role_accounts_count ?? emails.filter(e => e.account_type === 'role').length
+  const leakedCount = emailData.leaked_accounts_count ?? emails.filter(e => e.is_leaked).length
+  const totalFound = emailData.total_found ?? emails.length
+
+  if (emails.length === 0) {
+    return `
+    <div class="stat-tile-grid">
+        <div class="stat-tile stat-violet"><div class="st-label">Total Found</div><div class="st-value">${totalFound}</div><div class="st-sub">unique emails</div></div>
+        <div class="stat-tile stat-blue"><div class="st-label">Employee Accounts</div><div class="st-value">${employeeCount}</div><div class="st-sub">individual staff</div></div>
+        <div class="stat-tile stat-teal"><div class="st-label">Role Accounts</div><div class="st-value">${roleCount}</div><div class="st-sub">group / admin</div></div>
+        <div class="stat-tile stat-rose"><div class="st-label">Leaked / Exposed</div><div class="st-value">${leakedCount}</div><div class="st-sub">public leak exposure</div></div>
+    </div>
+    <p class="fallback-text">No email addresses discovered for this domain.</p>
+    `
+  }
+
+  return `
+    <div class="stat-tile-grid">
+        <div class="stat-tile stat-violet"><div class="st-label">Total Found</div><div class="st-value">${totalFound}</div><div class="st-sub">unique emails</div></div>
+        <div class="stat-tile stat-blue"><div class="st-label">Employee Accounts</div><div class="st-value">${employeeCount}</div><div class="st-sub">individual staff</div></div>
+        <div class="stat-tile stat-teal"><div class="st-label">Role Accounts</div><div class="st-value">${roleCount}</div><div class="st-sub">group / admin</div></div>
+        <div class="stat-tile stat-rose"><div class="st-label">Leaked / Exposed</div><div class="st-value">${leakedCount}</div><div class="st-sub">public leak exposure</div></div>
+    </div>
+    <div class="row-list">
+        <div class="row-list-header" style="grid-template-columns: 2fr 1fr 2fr;">
+            <div>Email Address</div>
+            <div style="text-align:center;">Type</div>
+            <div style="text-align:right;">Sources</div>
+        </div>
+        ${emails.map(e => `
+        <div class="row-list-row" style="grid-template-columns: 2fr 1fr 2fr;">
+            <div class="mono" style="font-weight: 700; color: #0f172a; word-break: break-all;">${e.email}</div>
+            <div style="text-align:center;">
+                <span class="badge-pill" style="background: ${e.account_type === 'employee' ? '#dbeafe' : '#e2e8f0'}; color: ${e.account_type === 'employee' ? '#1e40af' : '#334155'};">${e.account_type === 'employee' ? 'Employee' : 'Role'}</span>
+                ${e.is_leaked ? `<span class="badge-pill" style="background:#ffe4e6; color:#be123c; margin-left:4px;">Leaked</span>` : ''}
+            </div>
+            <div style="text-align:right;">
+                ${(e.sources || []).map(src => {
+                  const c = _EMAIL_SOURCE_COLORS[src] || '#64748b'
+                  return `<span class="source-chip" style="background: ${c}1a; color: ${c}; border-color: ${c}33;">${_EMAIL_SOURCE_LABELS[src] || src}</span>`
+                }).join('')}
+            </div>
+        </div>
+        `).join('')}
+    </div>
+  `
+}
+
 export function buildScanReportBody(data) {
   const r = data.results || {}
   const geo = r.geo_ip || {}
@@ -435,32 +782,26 @@ export function buildScanReportBody(data) {
   const tech = r.web_technologies || {}
   const headers = r.http_headers || {}
   const subdomains = r.subdomains || {}
+  // run_scan()'s task dict keys this "directories" (main.py), not
+  // "directory_enum" — Results.jsx checks both (directory_enum kept only
+  // as a legacy fallback). This export was checking directory_enum only,
+  // which made real directory-enum results silently report as "not
+  // executed" even when they'd actually run and found data.
+  const dirEnum = r.directories || r.directory_enum
 
   const isOk = isModuleOk
   const getStatusLabel = moduleStatusBadge
 
   return `
-        <!-- Header -->
-        <div class="header">
-            <div class="subtitle">Host Diagnostics Report</div>
-            <h1>🧭 ${data.target}</h1>
-            <div class="meta-grid">
-                <div class="meta-item">
-                    <span class="label">Resolved IP</span>
-                    <span class="value">${data.resolved_ip || 'N/A'}</span>
-                </div>
-                <div class="meta-item">
-                    <span class="label">Scan Mode</span>
-                    <span class="value">${(data.scan_mode || 'FAST').toUpperCase()}</span>
-                </div>
-                <div class="meta-item">
-                    <span class="label">Scan Duration</span>
-                    <span class="value">${data.scan_duration_seconds ? data.scan_duration_seconds + 's' : 'N/A'}</span>
-                </div>
-                <div class="meta-item">
-                    <span class="label">Scanned At</span>
-                    <span class="value">${new Date(data.scanned_at || Date.now()).toLocaleString()}</span>
-                </div>
+        <!-- Target Panel -->
+        <div class="target-panel">
+            <div class="target-panel-label">Diagnostics Panel</div>
+            <h1 class="target-panel-name">${data.target}</h1>
+            <div class="target-panel-meta">
+                ${data.resolved_ip && data.resolved_ip !== data.target ? `<span>Resolved IP: ${data.resolved_ip}</span><span class="sep">|</span>` : ''}
+                <span>Duration: ${data.scan_duration_seconds ? data.scan_duration_seconds + 's' : 'N/A'}</span>
+                <span class="sep">|</span>
+                <span class="mode-tag">${(data.scan_mode || 'fast').toUpperCase()}</span>
             </div>
         </div>
 
@@ -517,38 +858,7 @@ export function buildScanReportBody(data) {
                 <h3 class="card-title">🖥️ Active Services & Ports</h3>
                 ${getStatusLabel(r.port_scan)}
             </div>
-            ${isOk(r.port_scan) ? `
-            <div class="meta-summary-bar">
-                <span>Scanned: <strong>${ports.scanned_port_count || 0}</strong></span> |
-                <span>Open: <strong style="color: #15803d;">${ports.open_port_count || 0}</strong></span> |
-                <span>Closed: <strong>${ports.closed_port_count || 0}</strong></span> |
-                <span>Filtered: <strong style="color: #d97706;">${ports.filtered_port_count || 0}</strong></span>
-            </div>
-            ${ports.open_ports && ports.open_ports.length > 0 ? `
-            <table style="margin-top: 15px;">
-                <thead>
-                    <tr>
-                        <th style="width: 15%;">Port</th>
-                        <th style="width: 15%;">Protocol</th>
-                        <th style="width: 25%;">Service</th>
-                        <th style="width: 20%;">Version</th>
-                        <th style="width: 25%;">Service Header</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${ports.open_ports.map(p => `
-                    <tr>
-                        <td class="mono" style="font-weight: bold; color: #ea580c;">${p.port}</td>
-                        <td><span class="tag">TCP</span></td>
-                        <td><strong>${p.service || 'unknown'}</strong></td>
-                        <td>${p.version ? `<span class="tag tag-teal">${p.version}</span>` : '<span style="color: #94a3b8;">—</span>'}</td>
-                        <td class="mono" style="font-size: 11px; word-break: break-all;">${p.banner || '—'}</td>
-                    </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-            ` : `<p class="fallback-text" style="margin-top: 15px;">No active listening services detected on the scanned ports.</p>`}
-            ` : `<p class="fallback-text">No port scanning information was successfully collected.</p>`}
+            ${_portsCard(ports)}
         </div>
 
         <!-- Reverse DNS PTR Record -->
@@ -836,70 +1146,16 @@ export function buildScanReportBody(data) {
                 <h3 class="card-title">📁 Subdomains Index</h3>
                 ${data.is_domain ? getStatusLabel(r.subdomains) : '<span class="status-badge skipped">SKIPPED</span>'}
             </div>
-            ${data.is_domain ? (
-              isOk(r.subdomains) ? `
-              <div style="font-size: 10px; font-style: italic; color: #64748b; margin-bottom: 12px;">
-                  * Discovered ${Object.values(subdomains.sources || {}).reduce((acc, curr) => acc + (curr.count || 0), 0)} raw subdomain matches in total across all sources. These have been merged and deduplicated into ${subdomains.subdomains?.length || 0} unique subdomains below.
-              </div>
-              ${subdomains.subdomains && subdomains.subdomains.length > 0 ? `
-              <table style="border: 1px solid #e2e8f0; border-radius: 8px;">
-                  <thead>
-                      <tr>
-                          <th>Subdomain</th>
-                          <th>Resolved IP</th>
-                          <th>Source Provider</th>
-                      </tr>
-                  </thead>
-                  <tbody>
-                      ${subdomains.subdomains.map(s => `
-                      <tr>
-                          <td class="mono" style="font-weight: bold; color: #581c87; word-break: break-all;">${s.subdomain}</td>
-                          <td class="mono">${s.ip ? `<span style="color: #15803d; font-weight: bold;">${s.ip}</span>` : '<span style="color: #94a3b8;">—</span>'}</td>
-                          <td style="font-size: 10px; text-transform: uppercase; font-weight: bold; color: #6b21a8;">${s.source || '—'}</td>
-                      </tr>
-                      `).join('')}
-                  </tbody>
-              </table>
-              ` : `<p class="fallback-text">No subdomains were discovered.</p>`}
-              ` : `<p class="fallback-text">No subdomain enumeration was executed.</p>`
-            ) : `<p class="fallback-text" style="color: #64748b; font-style: italic;">Domain-specific scan skipped: Target is a direct IP address.</p>`}
+            ${_subdomainsCard(subdomains, data.is_domain)}
         </div>
 
         <!-- Directory Enumeration -->
         <div class="card">
             <div class="card-header">
                 <h3 class="card-title">📂 Directory Enumeration</h3>
-                ${getStatusLabel(r.directory_enum)}
+                ${getStatusLabel(dirEnum)}
             </div>
-            ${isOk(r.directory_enum) ? `
-            <div class="meta-summary-bar" style="margin-bottom: 15px;">
-                <span>Paths Checked: <strong>${r.directory_enum.paths_checked || 0}</strong></span> |
-                <span>Found: <strong style="color: #15803d;">${r.directory_enum.found?.length || 0}</strong></span>
-            </div>
-            ${r.directory_enum.found && r.directory_enum.found.length > 0 ? `
-            <table style="border: 1px solid #e2e8f0; border-radius: 8px;">
-                <thead>
-                    <tr>
-                        <th style="width: 15%;">Status</th>
-                        <th style="width: 55%;">Path & URL</th>
-                        <th style="width: 30%;">Content Type</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${r.directory_enum.found.map(p => `
-                    <tr>
-                        <td style="font-weight: bold; color: ${p.status === 200 ? '#16a34a' : (p.status === 403 ? '#dc2626' : (p.status >= 300 && p.status < 400 ? '#2563eb' : '#64748b'))};">${p.status}</td>
-                        <td class="mono" style="word-break: break-all; font-weight: bold; color: #0f172a;">
-                            ${p.path}
-                            ${p.url ? `<br><a href="${p.url}" target="_blank" style="font-size: 10px; color: #0284c7; font-weight: normal; text-decoration: none;">${p.url}</a>` : ''}
-                        </td>
-                        <td style="font-size: 11px; text-transform: uppercase; color: #475569;">${p.content_type || '—'}</td>
-                    </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-            ` : `<p class="fallback-text">No open directories/files were found.</p>`}
-            ` : `<p class="fallback-text">Directory enumeration was not executed.</p>`}
+            ${_directoryEnumCard(dirEnum)}
         </div>
 
         <!-- IP Reputation & Threat Intelligence -->
@@ -907,24 +1163,24 @@ export function buildScanReportBody(data) {
             <div class="card-header">
                 <h3 class="card-title">⚠️ IP Reputation & Threat Intelligence</h3>
                 <div>
-                    ${getStatusLabel(r.reputation)} ${getStatusLabel(r.virustotal)}
+                    ${getStatusLabel(r.abuseipdb)} ${getStatusLabel(r.virustotal)}
                 </div>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                 <!-- AbuseIPDB -->
-                ${isOk(r.reputation) ? `
+                ${isOk(r.abuseipdb) ? `
                 <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
                     <h4 style="font-size: 11px; text-transform: uppercase; color: #475569; margin-bottom: 10px; font-weight: bold;">AbuseIPDB Reputation</h4>
                     <table class="kv-table" style="font-size: 12px;">
-                        <tr><th style="width: 50%;">IP Address</th><td class="mono" style="font-weight: bold;">${r.reputation.ip || '—'}</td></tr>
-                        <tr><th>Threat Level</th><td><span style="font-weight: bold; color: ${r.reputation.threat_level === 'critical' ? '#b91c1c' : r.reputation.threat_level === 'high' ? '#dc2626' : r.reputation.threat_level === 'medium' ? '#f59e0b' : '#10b981'};">${(r.reputation.threat_level || '—').toUpperCase()}</span></td></tr>
-                        <tr><th>Abuse Confidence</th><td><strong style="color: ${r.reputation.abuse_confidence_score > 75 ? '#b91c1c' : r.reputation.abuse_confidence_score > 50 ? '#f59e0b' : '#10b981'};">${r.reputation.abuse_confidence_score || 0}%</strong></td></tr>
-                        <tr><th>Total Reports</th><td><strong>${r.reputation.total_reports || 0}</strong></td></tr>
-                        <tr><th>Country</th><td>${r.reputation.country_name ? `${r.reputation.country_name} (${r.reputation.country_code})` : '—'}</td></tr>
-                        <tr><th>ISP/Organization</th><td>${r.reputation.isp || '—'}</td></tr>
-                        <tr><th>Tor Network</th><td>${r.reputation.is_tor ? '<span style="color: #b91c1c; font-weight: bold;">YES (Exit Node)</span>' : 'No'}</td></tr>
-                        <tr><th>VPN/Proxy</th><td>${r.reputation.is_proxy ? '<span style="color: #f59e0b; font-weight: bold;">YES</span>' : 'No'}</td></tr>
-                        <tr><th>Whitelisted</th><td>${r.reputation.is_whitelisted ? '<span style="color: #10b981; font-weight: bold;">YES</span>' : 'No'}</td></tr>
+                        <tr><th style="width: 50%;">IP Address</th><td class="mono" style="font-weight: bold;">${r.abuseipdb.ip || '—'}</td></tr>
+                        <tr><th>Threat Level</th><td><span style="font-weight: bold; color: ${r.abuseipdb.threat_level === 'critical' ? '#b91c1c' : r.abuseipdb.threat_level === 'high' ? '#dc2626' : r.abuseipdb.threat_level === 'medium' ? '#f59e0b' : '#10b981'};">${(r.abuseipdb.threat_level || '—').toUpperCase()}</span></td></tr>
+                        <tr><th>Abuse Confidence</th><td><strong style="color: ${r.abuseipdb.abuse_confidence_score > 75 ? '#b91c1c' : r.abuseipdb.abuse_confidence_score > 50 ? '#f59e0b' : '#10b981'};">${r.abuseipdb.abuse_confidence_score || 0}%</strong></td></tr>
+                        <tr><th>Total Reports</th><td><strong>${r.abuseipdb.total_reports || 0}</strong></td></tr>
+                        <tr><th>Country</th><td>${r.abuseipdb.country_name ? `${r.abuseipdb.country_name} (${r.abuseipdb.country_code})` : '—'}</td></tr>
+                        <tr><th>ISP/Organization</th><td>${r.abuseipdb.isp || '—'}</td></tr>
+                        <tr><th>Tor Network</th><td>${r.abuseipdb.is_tor ? '<span style="color: #b91c1c; font-weight: bold;">YES (Exit Node)</span>' : 'No'}</td></tr>
+                        <tr><th>VPN/Proxy</th><td>${r.abuseipdb.is_proxy ? '<span style="color: #f59e0b; font-weight: bold;">YES</span>' : 'No'}</td></tr>
+                        <tr><th>Whitelisted</th><td>${r.abuseipdb.is_whitelisted ? '<span style="color: #10b981; font-weight: bold;">YES</span>' : 'No'}</td></tr>
                     </table>
                 </div>
                 ` : `<p class="fallback-text">AbuseIPDB reputation data not available.</p>`}
@@ -954,41 +1210,55 @@ export function buildScanReportBody(data) {
                 <h3 class="card-title">✉️ Email Harvesting & OSINT</h3>
                 ${data.is_domain ? getStatusLabel(r.email_gather) : '<span class="status-badge skipped">SKIPPED</span>'}
             </div>
-            ${data.is_domain ? (
-              isOk(r.email_gather) ? `
-              <div class="meta-summary-bar" style="margin-bottom: 15px;">
-                  <span>Total Discovered: <strong style="color: #6d28d9;">${r.email_gather.total_found || r.email_gather.emails?.length || 0}</strong></span> |
-                  <span>Employee Accounts: <strong>${r.email_gather.employee_accounts_count || (r.email_gather.emails || []).filter(e => e.account_type === 'employee').length}</strong></span> |
-                  <span>Role Accounts: <strong>${r.email_gather.role_accounts_count || (r.email_gather.emails || []).filter(e => e.account_type === 'role').length}</strong></span> |
-                  <span>Exposed/Leaked: <strong style="color: #b91c1c;">${r.email_gather.leaked_accounts_count || (r.email_gather.emails || []).filter(e => e.is_leaked).length}</strong></span>
-              </div>
-              ${r.email_gather.emails && r.email_gather.emails.length > 0 ? `
-              <table style="border: 1px solid #e2e8f0; border-radius: 8px;">
-                  <thead>
-                      <tr>
-                          <th style="width: 50%;">Email Address</th>
-                          <th style="width: 20%;">Type</th>
-                          <th style="width: 30%;">Sources</th>
-                      </tr>
-                  </thead>
-                  <tbody>
-                      ${r.email_gather.emails.map(e => `
-                      <tr>
-                          <td class="mono" style="font-weight: bold; color: #1e293b;">${e.email}</td>
-                          <td>
-                              <span class="tag ${e.account_type === 'employee' ? 'tag-teal' : 'tag-slate'}">${e.account_type}</span>
-                              ${e.is_leaked ? '<span class="tag" style="background-color:#ffe4e6; color:#9f1239;">Leaked</span>' : ''}
-                          </td>
-                          <td style="font-size: 10px;">${(e.sources || []).join(', ')}</td>
-                      </tr>
-                      `).join('')}
-                  </tbody>
-              </table>
-              ` : `<p class="fallback-text">No email addresses discovered for this domain.</p>`}
-              ` : `<p class="fallback-text">Email harvesting was not executed.</p>`
-            ) : `<p class="fallback-text" style="color: #64748b; font-style: italic;">Domain-specific scan skipped: Target is a direct IP address.</p>`}
+            ${_emailHarvestingCard(r.email_gather || {}, data.is_domain)}
         </div>
 `
+}
+
+const HTTP_AVAIL_OVERALL_STYLES = {
+  https_ok: { label: 'Accessible (HTTPS)', bg: '#f0fdfa', border: '#99f6e4', color: '#0f766e' },
+  no_forced_https: { label: 'Accessible — HTTPS Not Enforced', bg: '#fffbeb', border: '#fde68a', color: '#92400e' },
+  http_only: { label: 'HTTP Only — HTTPS Unavailable', bg: '#fffbeb', border: '#fde68a', color: '#92400e' },
+  not_accessible: { label: 'Not Accessible', bg: '#fef2f2', border: '#fecaca', color: '#b91c1c' },
+  blocked_by_waf: { label: 'Blocked by WAF/Bot Protection', bg: '#fffbeb', border: '#fde68a', color: '#92400e' },
+}
+
+function _httpAvailabilityCard(label, result) {
+  if (!result) return ''
+  const badgeLabel = result.blocked_by_waf ? 'WAF Challenge'
+    : result.weak_tls_downgrade ? 'Accessible (Weak TLS)'
+    : result.accessible ? 'Accessible' : 'Not Accessible'
+  const badgeStyle = (result.blocked_by_waf || result.weak_tls_downgrade)
+    ? 'background-color:#fffbeb;border-color:#fde68a;color:#92400e;'
+    : result.accessible
+      ? 'background-color:#f0fdfa;border-color:#99f6e4;color:#0f766e;'
+      : 'background-color:#fef2f2;border-color:#fecaca;color:#b91c1c;'
+  return `
+  <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-bottom: 12px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+          <span style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: bold;">${label} · Port ${result.port ?? '—'}</span>
+          <span style="font-size: 9px; font-weight: 800; text-transform: uppercase; padding: 4px 10px; border-radius: 999px; border: 1px solid; ${badgeStyle}">${badgeLabel}</span>
+      </div>
+      ${result.blocked_by_waf ? `<p class="fallback-text" style="color: #92400e;">${result.waf_note || ''}</p>` : ''}
+      ${result.weak_tls_downgrade ? `<p class="fallback-text" style="color: #92400e;">${result.weak_tls_note || ''}</p>` : ''}
+      ${result.accessible ? `
+      <table class="kv-table" style="font-size: 12px;">
+          <tr><th style="width: 40%;">Status Code</th><td>${result.status_code ?? '—'}</td></tr>
+          <tr><th>HTTP Version</th><td>${result.http_version || '—'}</td></tr>
+          <tr><th>Response Time</th><td>${result.response_time_ms != null ? result.response_time_ms + 'ms' : '—'}</td></tr>
+          ${result.redirects_to ? `<tr><th>Redirects To</th><td class="mono" style="word-break: break-all;">${result.redirects_to}</td></tr>` : ''}
+          ${result.redirect_count > 0 ? `<tr><th>Redirect Hops</th><td>${result.redirect_count}</td></tr>` : ''}
+          ${result.final_url ? `<tr><th>Final URL</th><td class="mono" style="word-break: break-all;">${result.final_url}</td></tr>` : ''}
+          ${result.final_status_code ? `<tr><th>Final Status</th><td>${result.final_status_code}</td></tr>` : ''}
+      </table>
+      <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px;">
+          ${result.weak_tls_downgrade ? `<span class="tag" style="background-color:#fffbeb;border-color:#fde68a;color:#92400e;">Weak TLS — Non-Standard Client Only</span>` : ''}
+          ${result.http2_supported ? `<span class="tag tag-teal">HTTP/2 Supported (via ALPN)</span>` : ''}
+          ${result.hsts ? `<span class="tag" style="background-color:#f0fdfa;border-color:#99f6e4;color:#0f766e;">HSTS: max-age=${result.hsts.max_age_seconds ?? '?'}${result.hsts.include_subdomains ? ' · subdomains' : ''}${result.hsts.preload ? ' · preload' : ''}</span>` : ''}
+      </div>
+      ` : `<p class="fallback-text">${result.error_message || 'Connection failed.'}</p>`}
+  </div>
+  `
 }
 
 export function buildScanReportBodyTwoPane(data) {
@@ -999,9 +1269,23 @@ export function buildScanReportBodyTwoPane(data) {
   const tech = r.web_technologies || {}
   const headers = r.http_headers || {}
   const subdomains = r.subdomains || {}
+  // See buildScanReportBody's dirEnum comment — same legacy-key fallback.
+  const dirEnum = r.directories || r.directory_enum || {}
+  const ports = r.port_scan || {}
+  const abuseipdb = r.abuseipdb || {}
+  const virustotal = r.virustotal || {}
+  const httpAvail = r.http_availability || {}
+  const shodan = r.shodan_intel || {}
 
   const isOk = isModuleOk
   const getStatusLabel = moduleStatusBadge
+
+  // 'deep' and 'detailed' are full synonyms everywhere else in the app
+  // (scan_config.py's SCAN_MODES, Results.jsx's own isDeep) — the
+  // aggressive/reputation module nav items and findings below only make
+  // sense to show when the scan actually ran them, which is exactly this
+  // condition (matches Results.jsx line ~518).
+  const isDeep = data.scan_mode === 'deep' || data.scan_mode === 'detailed'
 
   const sslDays = ssl.days_until_expiry
   let whoisDays = r.whois?.days_until_expiry
@@ -1016,7 +1300,19 @@ export function buildScanReportBodyTwoPane(data) {
   const cloudDetected = r.cloud_provider?.cloud_detected
   const cmsDetected = r.cms_fingerprint?.cms_detected
   const wafDetected = r.waf_detect?.waf_detected
+  const httpAvailOverall = httpAvail.overall
+  const shodanVulnCount = shodan.vulns?.length || 0
+  const shodanHasData = shodan.has_data !== false
+  const emailFoundCount = r.email_gather?.total_found ?? r.email_gather?.emails?.length ?? 0
+  const dirFoundCount = dirEnum.paths_found ?? dirEnum.found?.length ?? 0
+  const reputationFlagged = (abuseipdb.abuse_confidence_score > 0) || (virustotal.detection_stats?.malicious > 0)
 
+  // Findings (Overview pane) and navItems (sidebar) below are kept in
+  // exact parity with Results.jsx's own `findings`/`MODULE_NAV` arrays —
+  // this export previously only had 8 of the 15 findings and 10 of the 18
+  // sidebar modules, silently dropping http_availability, shodan_intel,
+  // port_scan, directories, reverse_dns, reputation (abuseipdb+virustotal)
+  // and email_gather from every downloaded report.
   const findings = [
     {
       pane: 'ssl', icon: '🔑', label: 'SSL Certificate',
@@ -1039,16 +1335,39 @@ export function buildScanReportBodyTwoPane(data) {
       tone: wafDetected ? 'good' : 'neutral',
     },
     {
+      pane: 'http_availability', icon: '📶', label: 'HTTP Availability',
+      value: httpAvailOverall === 'https_ok' ? 'HTTPS enforced'
+        : httpAvailOverall === 'no_forced_https' ? 'HTTPS not enforced'
+        : httpAvailOverall === 'http_only' ? 'HTTP only'
+        : httpAvailOverall === 'blocked_by_waf' ? 'Blocked by WAF'
+        : httpAvailOverall === 'not_accessible' ? 'Not accessible'
+        : 'Not available',
+      tone: httpAvailOverall === 'https_ok' ? 'good'
+        : httpAvailOverall === 'no_forced_https' ? 'warning'
+        : httpAvailOverall === 'not_accessible' || httpAvailOverall === 'blocked_by_waf' ? 'danger'
+        : 'neutral',
+    },
+    {
+      pane: 'shodan_intel', icon: '📡', label: 'Shodan Intel',
+      value: shodanVulnCount > 0 ? `${shodanVulnCount} known CVEs` : shodanHasData ? 'No known CVEs' : 'Not available',
+      tone: shodanVulnCount > 0 ? 'danger' : shodanHasData ? 'good' : 'neutral',
+    },
+    {
+      pane: 'geoip', icon: '📍', label: 'GeoIP Location',
+      value: (geo.city && geo.country) ? `${geo.city}, ${geo.country}` : (geo.country || geo.city || 'Not available'),
+      tone: 'neutral',
+    },
+    {
       pane: 'tech', icon: '🛠️', label: 'Web Technologies',
       value: techCount > 0 ? `${techCount} identified` : 'None identified',
       tone: 'neutral',
     },
-    data.is_domain && {
+    isDeep && data.is_domain && {
       pane: 'subdomains', icon: '📁', label: 'Subdomains',
       value: subdomainsCount > 0 ? `${subdomainsCount} discovered` : 'None found',
       tone: 'neutral',
     },
-    {
+    isDeep && {
       pane: 'cloud', icon: '☁️', label: 'Cloud Provider',
       value: cloudDetected ? r.cloud_provider.provider : 'Self-hosted / non-cloud',
       tone: 'neutral',
@@ -1058,43 +1377,58 @@ export function buildScanReportBodyTwoPane(data) {
       value: cmsDetected ? r.cms_fingerprint.cms_name : 'No known CMS',
       tone: 'neutral',
     },
+    isDeep && data.is_domain && {
+      pane: 'email_gather', icon: '✉️', label: 'Email Harvesting',
+      value: emailFoundCount > 0 ? `${emailFoundCount} discovered` : 'None found',
+      tone: 'neutral',
+    },
+    isDeep && {
+      pane: 'ports', icon: '🖥️', label: 'Open Ports',
+      value: ports.open_port_count > 0 ? `${ports.open_port_count} open` : 'None found',
+      tone: ports.open_port_count > 0 ? 'warning' : 'good',
+    },
+    isDeep && {
+      pane: 'directories', icon: '📂', label: 'Directory Enum',
+      value: dirFoundCount > 0 ? `${dirFoundCount} discovered` : 'None found',
+      tone: 'neutral',
+    },
+    isDeep && {
+      pane: 'reputation', icon: '⚠️', label: 'IP Reputation',
+      value: reputationFlagged ? 'Flagged by threat intel' : 'Clean',
+      tone: reputationFlagged ? 'danger' : 'good',
+    },
   ].filter(Boolean)
 
   const navItems = [
-    { pane: 'dns', icon: '🌐', label: 'DNS Records', domainOnly: true, badge: dnsTypesCount > 0 ? String(dnsTypesCount) : null },
-    { pane: 'whois', icon: '📄', label: 'WHOIS Registry', domainOnly: true },
-    { pane: 'ssl', icon: '🔒', label: 'SSL Certificate', badge: sslDays != null ? `${sslDays}d` : null },
-    { pane: 'geoip', icon: '📍', label: 'GeoIP Location' },
-    { pane: 'tech', icon: '🛠️', label: 'Web Technologies', badge: techCount > 0 ? String(techCount) : null },
-    { pane: 'headers', icon: '🛡️', label: 'Security Headers', badge: headersCount > 0 ? String(headersCount) : null },
-    { pane: 'waf', icon: '🛡️', label: 'WAF Detection', badge: wafDetected ? '!' : null },
-    { pane: 'subdomains', icon: '📁', label: 'Subdomains', domainOnly: true, badge: subdomainsCount > 0 ? String(subdomainsCount) : null },
-    { pane: 'cloud', icon: '☁️', label: 'Cloud Provider' },
-    { pane: 'cms', icon: '🧩', label: 'CMS Detection' },
-  ].filter(item => !item.domainOnly || data.is_domain)
+    { pane: 'dns', icon: '🌐', label: 'DNS Records', color: 'blue', domainOnly: true, badge: dnsTypesCount > 0 ? String(dnsTypesCount) : null },
+    { pane: 'whois', icon: '📄', label: 'WHOIS Registry', color: 'slate', domainOnly: true },
+    { pane: 'ssl', icon: '🔒', label: 'SSL Certificate', color: 'teal', badge: sslDays != null ? `${sslDays}d` : null },
+    { pane: 'geoip', icon: '📍', label: 'GeoIP Location', color: 'blue' },
+    { pane: 'tech', icon: '🛠️', label: 'Web Technologies', color: 'amber', badge: techCount > 0 ? String(techCount) : null },
+    { pane: 'headers', icon: '🛡️', label: 'Security Headers', color: 'cyan', badge: headersCount > 0 ? String(headersCount) : null },
+    { pane: 'http_availability', icon: '📶', label: 'HTTP Availability', color: 'teal' },
+    { pane: 'shodan_intel', icon: '📡', label: 'Shodan Intel', color: 'indigo' },
+    { pane: 'waf', icon: '🛡️', label: 'WAF Detection', color: 'red', badge: wafDetected ? '!' : null },
+    { pane: 'ports', icon: '🖥️', label: 'Ports & Services', color: 'indigo', deepOnly: true, badge: ports.open_port_count > 0 ? String(ports.open_port_count) : null },
+    { pane: 'directories', icon: '📂', label: 'Directory Enum', color: 'emerald', deepOnly: true, badge: dirFoundCount > 0 ? String(dirFoundCount) : null },
+    { pane: 'reverse_dns', icon: '🌐', label: 'Reverse DNS', color: 'violet', deepOnly: true },
+    { pane: 'reputation', icon: '⚠️', label: 'IP Reputation', color: 'orange', deepOnly: true },
+    { pane: 'email_gather', icon: '✉️', label: 'Email Harvesting', color: 'rose', deepOnly: true, domainOnly: true, badge: emailFoundCount > 0 ? String(emailFoundCount) : null },
+    { pane: 'subdomains', icon: '📁', label: 'Subdomains', color: 'purple', deepOnly: true, domainOnly: true, badge: subdomainsCount > 0 ? String(subdomainsCount) : null },
+    { pane: 'cloud', icon: '☁️', label: 'Cloud Provider', color: 'sky', deepOnly: true },
+    { pane: 'cms', icon: '🧩', label: 'CMS Detection', color: 'fuchsia' },
+  ].filter(item => (!item.domainOnly || data.is_domain) && (!item.deepOnly || isDeep))
 
   return `
-        <!-- Header -->
-        <div class="header">
-            <div class="subtitle">Host Diagnostics Report</div>
-            <h1>🧭 ${data.target}</h1>
-            <div class="meta-grid">
-                <div class="meta-item">
-                    <span class="label">Resolved IP</span>
-                    <span class="value">${data.resolved_ip || 'N/A'}</span>
-                </div>
-                <div class="meta-item">
-                    <span class="label">Scan Mode</span>
-                    <span class="value">${data.scan_mode === 'fast' ? 'STANDARD SCAN' : 'DEEP SCAN'}</span>
-                </div>
-                <div class="meta-item">
-                    <span class="label">Scan Duration</span>
-                    <span class="value">${data.scan_duration_seconds ? data.scan_duration_seconds + 's' : 'N/A'}</span>
-                </div>
-                <div class="meta-item">
-                    <span class="label">Scanned At</span>
-                    <span class="value">${new Date(data.scanned_at || Date.now()).toLocaleString()}</span>
-                </div>
+        <!-- Target Panel -->
+        <div class="target-panel">
+            <div class="target-panel-label">Diagnostics Panel</div>
+            <h1 class="target-panel-name">${data.target}</h1>
+            <div class="target-panel-meta">
+                ${data.resolved_ip && data.resolved_ip !== data.target ? `<span>Resolved IP: ${data.resolved_ip}</span><span class="sep">|</span>` : ''}
+                <span>Duration: ${data.scan_duration_seconds ? data.scan_duration_seconds + 's' : 'N/A'}</span>
+                <span class="sep">|</span>
+                <span class="mode-tag">${data.scan_mode === 'fast' ? 'Standard Scan' : 'Deep Scan'}</span>
             </div>
         </div>
 
@@ -1102,9 +1436,9 @@ export function buildScanReportBodyTwoPane(data) {
             <!-- Sidebar -->
             <div class="report-sidebar">
                 <div class="report-sidebar-title">Modules</div>
-                <button class="sidebar-btn active" data-pane="overview" onclick="showReportPane('overview', this)">📊 Overview</button>
+                <button class="sidebar-btn active" data-pane="overview" data-color="teal" onclick="showReportPane('overview', this)">📊 Overview</button>
                 ${navItems.map(item => `
-                <button class="sidebar-btn" data-pane="${item.pane}" onclick="showReportPane('${item.pane}', this)">
+                <button class="sidebar-btn" data-pane="${item.pane}" data-color="${item.color}" onclick="showReportPane('${item.pane}', this)">
                     ${item.icon} ${item.label}
                     ${item.badge ? `<span class="nav-badge">${item.badge}</span>` : ''}
                 </button>
@@ -1354,6 +1688,81 @@ export function buildScanReportBodyTwoPane(data) {
                 </div>
                 </div>
 
+                <!-- HTTP Availability -->
+                <div id="pane-http_availability" class="content-pane" hidden>
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">📶 HTTP/HTTPS Accessibility</h3>
+                        ${getStatusLabel(r.http_availability)}
+                    </div>
+                    ${isOk(r.http_availability) ? `
+                    ${(() => {
+                      const style = HTTP_AVAIL_OVERALL_STYLES[httpAvail.overall] || { label: httpAvail.overall || 'Unknown', bg: '#f8fafc', border: '#e2e8f0', color: '#334155' }
+                      return `<div style="display: inline-block; padding: 8px 14px; border-radius: 8px; font-weight: bold; margin-bottom: 15px; border: 1px solid ${style.border}; background-color: ${style.bg}; color: ${style.color};">${style.label}</div>`
+                    })()}
+                    ${httpAvail.summary ? `<p style="font-size: 12px; color: #64748b; margin-bottom: 15px;">${httpAvail.summary}</p>` : ''}
+                    ${_httpAvailabilityCard('HTTP', httpAvail.http)}
+                    ${_httpAvailabilityCard('HTTPS', httpAvail.https)}
+                    ` : `<p class="fallback-text">No accessibility data available.</p>`}
+                </div>
+                </div>
+
+                <!-- Shodan Intel -->
+                <div id="pane-shodan_intel" class="content-pane" hidden>
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">📡 Shodan Intel</h3>
+                        ${getStatusLabel(r.shodan_intel)}
+                    </div>
+                    ${isOk(r.shodan_intel) && shodan.has_data !== false ? `
+                    <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 18px;">
+                        <div style="font-size: 32px; font-weight: 800; font-family: monospace; color: ${(shodan.vulns?.length || 0) > 0 ? '#b91c1c' : '#0f766e'};">${shodan.vulns?.length || 0}</div>
+                        <div style="font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; font-weight: bold;">known CVEs on detected services</div>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <h4 style="font-size: 10px; text-transform: uppercase; color: #64748b; margin-bottom: 8px;">Threat/Infra Tags (${(shodan.tags || []).length})</h4>
+                        ${(shodan.tags || []).length > 0 ? `
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                            ${shodan.tags.map(t => `<div><span class="tag" style="background-color: #eef2ff; border-color: #c7d2fe; color: #4338ca;">${t.tag}</span>${t.description ? ` <span style="font-size: 10px; color: #64748b;">${t.description}</span>` : ''}</div>`).join('')}
+                        </div>
+                        ` : `<p class="fallback-text">None assigned.</p>`}
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <h4 style="font-size: 10px; text-transform: uppercase; color: #64748b; margin-bottom: 8px;">Open Ports (${(shodan.ports || []).length})</h4>
+                        ${(shodan.ports || []).length > 0 ? `
+                        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                            ${shodan.ports.map(p => `<span class="tag">${p.port}${p.service ? ` · ${p.service}` : ''}</span>`).join('')}
+                        </div>
+                        ` : `<p class="fallback-text">No open ports on record.</p>`}
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <h4 style="font-size: 10px; text-transform: uppercase; color: #64748b; margin-bottom: 8px;">Associated Hostnames (${(shodan.hostnames || []).length})</h4>
+                        ${(shodan.hostnames || []).length > 0 ? `
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            ${shodan.hostnames.map(h => `<div class="mono" style="font-size: 11px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 6px 10px; border-radius: 6px; word-break: break-all;">${h}</div>`).join('')}
+                        </div>
+                        ` : `<p class="fallback-text">None on record.</p>`}
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <h4 style="font-size: 10px; text-transform: uppercase; color: #64748b; margin-bottom: 8px;">Detected Software (${(shodan.cpes || []).length})</h4>
+                        ${(shodan.cpes || []).length > 0 ? `
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            ${shodan.cpes.map(c => `<div class="mono" style="font-size: 11px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 6px 10px; border-radius: 6px; word-break: break-all;">${[c.vendor, c.product].filter(Boolean).join(' ').replace(/_/g, ' ') || c.raw}${c.version ? ` v${c.version}` : ''}${c.type ? ` (${c.type})` : ''}</div>`).join('')}
+                        </div>
+                        ` : `<p class="fallback-text">No software/version fingerprinted.</p>`}
+                    </div>
+                    <div style="border-top: 1px solid #e2e8f0; padding-top: 15px;">
+                        <h4 style="font-size: 10px; text-transform: uppercase; color: ${(shodan.vulns?.length || 0) > 0 ? '#b91c1c' : '#64748b'}; margin-bottom: 8px;">Known Vulnerabilities (${(shodan.vulns || []).length})</h4>
+                        ${(shodan.vulns || []).length > 0 ? `
+                        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                            ${shodan.vulns.map(v => `<a href="https://nvd.nist.gov/vuln/detail/${v}" target="_blank" class="tag" style="background-color: #fef2f2; border-color: #fecaca; color: #b91c1c; text-decoration: none;">${v}</a>`).join('')}
+                        </div>
+                        ` : `<p class="fallback-text">No known CVEs tied to detected services.</p>`}
+                    </div>
+                    ` : isOk(r.shodan_intel) ? `<p class="fallback-text">${shodan.note || 'No Shodan data available for this IP.'}</p>` : `<p class="fallback-text">Shodan intel not available.</p>`}
+                </div>
+                </div>
+
                 <!-- WAF Detection -->
                 <div id="pane-waf" class="content-pane" hidden>
                 <div class="card">
@@ -1386,6 +1795,106 @@ export function buildScanReportBodyTwoPane(data) {
                 </div>
                 </div>
 
+                <!-- Ports & Services -->
+                <div id="pane-ports" class="content-pane" hidden>
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">🖥️ Active Services & Ports</h3>
+                        ${getStatusLabel(r.port_scan)}
+                    </div>
+                    ${_portsCard(ports)}
+                </div>
+                </div>
+
+                <!-- Directory Enumeration -->
+                <div id="pane-directories" class="content-pane" hidden>
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">📂 Directory Enumeration</h3>
+                        ${getStatusLabel(dirEnum)}
+                    </div>
+                    ${_directoryEnumCard(dirEnum)}
+                </div>
+                </div>
+
+                <!-- Reverse DNS -->
+                <div id="pane-reverse_dns" class="content-pane" hidden>
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">🌐 Reverse DNS Pointer (PTR Record)</h3>
+                        ${getStatusLabel(r.reverse_dns)}
+                    </div>
+                    ${r.reverse_dns && r.reverse_dns.status !== 'skipped' && r.reverse_dns.hostname ? `
+                    <div class="mono" style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 8px;">
+                        <div style="font-weight: bold; color: #0f172a;">${r.reverse_dns.hostname}</div>
+                        ${r.reverse_dns.nslookup_resolver_hostname && r.reverse_dns.nslookup_resolver_hostname !== r.reverse_dns.hostname ? `
+                        <div style="font-size: 10px; color: #64748b; margin-top: 4px;">
+                            Comparing resolvers: Socket resolution resolved <strong>${r.reverse_dns.primary_resolver_hostname || '—'}</strong>, nslookup resolved <strong>${r.reverse_dns.nslookup_resolver_hostname}</strong>
+                        </div>
+                        ` : ''}
+                    </div>
+                    ` : `<p class="fallback-text">No PTR record found.</p>`}
+                </div>
+                </div>
+
+                <!-- IP Reputation -->
+                <div id="pane-reputation" class="content-pane" hidden>
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">⚠️ IP Reputation & Threat Intelligence</h3>
+                        <div>
+                            ${getStatusLabel(r.abuseipdb)} ${getStatusLabel(r.virustotal)}
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        ${isOk(r.abuseipdb) ? `
+                        <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+                            <h4 style="font-size: 11px; text-transform: uppercase; color: #475569; margin-bottom: 10px; font-weight: bold;">AbuseIPDB Reputation</h4>
+                            <table class="kv-table" style="font-size: 12px;">
+                                <tr><th style="width: 50%;">IP Address</th><td class="mono" style="font-weight: bold;">${r.abuseipdb.ip || '—'}</td></tr>
+                                <tr><th>Threat Level</th><td><span style="font-weight: bold; color: ${r.abuseipdb.threat_level === 'critical' ? '#b91c1c' : r.abuseipdb.threat_level === 'high' ? '#dc2626' : r.abuseipdb.threat_level === 'medium' ? '#f59e0b' : '#10b981'};">${(r.abuseipdb.threat_level || '—').toUpperCase()}</span></td></tr>
+                                <tr><th>Abuse Confidence</th><td><strong style="color: ${r.abuseipdb.abuse_confidence_score > 75 ? '#b91c1c' : r.abuseipdb.abuse_confidence_score > 50 ? '#f59e0b' : '#10b981'};">${r.abuseipdb.abuse_confidence_score || 0}%</strong></td></tr>
+                                <tr><th>Total Reports</th><td><strong>${r.abuseipdb.total_reports || 0}</strong></td></tr>
+                                <tr><th>Country</th><td>${r.abuseipdb.country_name ? `${r.abuseipdb.country_name} (${r.abuseipdb.country_code})` : '—'}</td></tr>
+                                <tr><th>ISP/Organization</th><td>${r.abuseipdb.isp || '—'}</td></tr>
+                                <tr><th>Tor Network</th><td>${r.abuseipdb.is_tor ? '<span style="color: #b91c1c; font-weight: bold;">YES (Exit Node)</span>' : 'No'}</td></tr>
+                                <tr><th>VPN/Proxy</th><td>${r.abuseipdb.is_proxy ? '<span style="color: #f59e0b; font-weight: bold;">YES</span>' : 'No'}</td></tr>
+                                <tr><th>Whitelisted</th><td>${r.abuseipdb.is_whitelisted ? '<span style="color: #10b981; font-weight: bold;">YES</span>' : 'No'}</td></tr>
+                            </table>
+                        </div>
+                        ` : `<p class="fallback-text">AbuseIPDB reputation data not available.</p>`}
+                        ${isOk(r.virustotal) ? `
+                        <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+                            <h4 style="font-size: 11px; text-transform: uppercase; color: #475569; margin-bottom: 10px; font-weight: bold;">VirusTotal Scan Results</h4>
+                            <table class="kv-table" style="font-size: 12px;">
+                                <tr><th style="width: 50%;">Target</th><td class="mono" style="font-weight: bold;">${r.virustotal.target || '—'}</td></tr>
+                                <tr><th>Threat Level</th><td><span style="font-weight: bold; color: ${r.virustotal.threat_level === 'critical' ? '#b91c1c' : r.virustotal.threat_level === 'high' ? '#dc2626' : r.virustotal.threat_level === 'medium' ? '#f59e0b' : '#10b981'};">${(r.virustotal.threat_level || '—').toUpperCase()}</span></td></tr>
+                                <tr><th>Detection Ratio</th><td><strong>${r.virustotal.detection_ratio || '0/0'}</strong></td></tr>
+                                <tr><th>Malicious Engines</th><td style="color: #b91c1c; font-weight: bold;">${r.virustotal.detection_stats?.malicious || 0}</td></tr>
+                                <tr><th>Suspicious Engines</th><td style="color: #f59e0b; font-weight: bold;">${r.virustotal.detection_stats?.suspicious || 0}</td></tr>
+                                <tr><th>Clean Engines</th><td style="color: #10b981; font-weight: bold;">${r.virustotal.detection_stats?.harmless || 0}</td></tr>
+                                <tr><th>Total Engines</th><td><strong>${r.virustotal.detection_stats?.total_engines || 0}</strong></td></tr>
+                                <tr><th>Reputation Score</th><td><strong>${r.virustotal.reputation !== undefined ? r.virustotal.reputation : '—'}</strong></td></tr>
+                            </table>
+                        </div>
+                        ` : `<p class="fallback-text">VirusTotal data not available.</p>`}
+                    </div>
+                </div>
+                </div>
+
+                <!-- Email Harvesting -->
+                ${data.is_domain ? `
+                <div id="pane-email_gather" class="content-pane" hidden>
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">✉️ Email Harvesting & OSINT</h3>
+                        ${getStatusLabel(r.email_gather)}
+                    </div>
+                    ${_emailHarvestingCard(r.email_gather || {}, data.is_domain)}
+                </div>
+                </div>
+                ` : ''}
+
                 <!-- Subdomains -->
                 ${data.is_domain ? `
                 <div id="pane-subdomains" class="content-pane" hidden>
@@ -1394,31 +1903,7 @@ export function buildScanReportBodyTwoPane(data) {
                         <h3 class="card-title">📁 Subdomains Index</h3>
                         ${getStatusLabel(r.subdomains)}
                     </div>
-                    ${isOk(r.subdomains) ? `
-                    <div style="font-size: 10px; font-style: italic; color: #64748b; margin-bottom: 12px;">
-                        * Discovered ${Object.values(subdomains.sources || {}).reduce((acc, curr) => acc + (curr.count || 0), 0)} raw subdomain matches in total across all sources. These have been merged and deduplicated into ${subdomains.subdomains?.length || 0} unique subdomains below.
-                    </div>
-                    ${subdomains.subdomains && subdomains.subdomains.length > 0 ? `
-                    <table style="border: 1px solid #e2e8f0; border-radius: 8px;">
-                        <thead>
-                            <tr>
-                                <th>Subdomain</th>
-                                <th>Resolved IP</th>
-                                <th>Source Provider</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${subdomains.subdomains.map(s => `
-                            <tr>
-                                <td class="mono" style="font-weight: bold; color: #581c87; word-break: break-all;">${s.subdomain}</td>
-                                <td class="mono">${s.ip ? `<span style="color: #15803d; font-weight: bold;">${s.ip}</span>` : '<span style="color: #94a3b8;">—</span>'}</td>
-                                <td style="font-size: 10px; text-transform: uppercase; font-weight: bold; color: #6b21a8;">${s.source || '—'}</td>
-                            </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                    ` : `<p class="fallback-text">No subdomains were discovered.</p>`}
-                    ` : `<p class="fallback-text">No subdomain enumeration was executed.</p>`}
+                    ${_subdomainsCard(subdomains, true)}
                 </div>
                 </div>
                 ` : ''}
@@ -1499,7 +1984,7 @@ export function buildBatchScanReportBody(batchResults, { title = 'Batch Full Sca
     const rows = batchResults.results || []
 
     const sections = rows.map((item) => {
-        const statusClass = item.status === 'completed' ? 'ok' : item.status === 'failed' || item.status === 'timeout' ? 'error' : 'skipped'
+        const statusClass = item.status === 'completed' ? 'ok' : item.status === 'failed' ? 'error' : item.status === 'timeout' ? 'partial' : 'skipped'
 
         let body
         if (item.scan_result) {
@@ -1516,6 +2001,7 @@ export function buildBatchScanReportBody(batchResults, { title = 'Batch Full Sca
           <summary>
             <span class="subdomain-name">${_escapeHtmlForBatch(item.target)}</span>
             <span class="status-badge ${statusClass}">${_escapeHtmlForBatch(item.status).toUpperCase()}</span>
+            ${item.resolved_ips && item.resolved_ips.length ? `<span class="ip-list">IPs: ${_escapeHtmlForBatch(item.resolved_ips.join(', '))}</span>` : ''}
           </summary>
           <div class="subdomain-content">
             ${body}

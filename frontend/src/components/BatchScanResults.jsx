@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Download, Copy, Check, AlertCircle, CheckCircle2, Clock, Server, Globe, ChevronDown, ArrowLeft, ArrowRight } from 'lucide-react'
 import Results from './Results'
-import { SCAN_REPORT_STYLES, buildScanReportBody } from '../utils/scanReportHtml'
+import { buildBatchScanReportBody } from '../utils/scanReportHtml'
 
 const API_BASE = import.meta.env.DEV ? '/api' : ''
 
@@ -61,71 +61,27 @@ export default function BatchScanResults({ batchId, onClose, onViewSubdomain }) 
     ? results.results
     : results.results.filter(r => r.status === filterStatus)
 
-  const escapeHtml = (str) =>
-    String(str ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
-
   const downloadHtmlReport = () => {
-    const rows = results.results || []
+    // buildBatchScanReportBody expects {target, ...} rows and
+    // total_targets/completed_scans/failed_scans — subdomain-batch results
+    // use {subdomain, ...} and total_subdomains, so map the shape here
+    // rather than duplicating the whole HTML-building logic a second time
+    // (this used to be a hand-rolled copy that always used the older flat
+    // buildScanReportBody layout regardless of scan mode, and never
+    // included port_scan/directories/reverse_dns/reputation/email_gather/
+    // http_availability/shodan_intel — buildBatchScanReportBody picks the
+    // same sidebar layout the app itself uses and includes every module).
+    const mappedResults = {
+      total_targets: results.total_subdomains,
+      completed_scans: results.completed_scans,
+      failed_scans: results.failed_scans,
+      results: (results.results || []).map((item) => ({ ...item, target: item.subdomain })),
+    }
 
-    const subdomainSections = rows.map((item) => {
-      const statusClass = item.status === 'completed' ? 'ok' : item.status === 'failed' ? 'error' : item.status === 'timeout' ? 'partial' : 'skipped'
-
-      const body = item.scan_result
-        ? buildScanReportBody(item.scan_result)
-        : (item.error
-            ? `<div class="error-box">${escapeHtml(item.error)}</div>`
-            : '<p class="fallback-text">No scan data was captured for this subdomain.</p>')
-
-      return `
-        <details class="subdomain-block">
-          <summary>
-            <span class="subdomain-name">${escapeHtml(item.subdomain)}</span>
-            <span class="status-badge ${statusClass}">${escapeHtml(item.status).toUpperCase()}</span>
-            ${item.resolved_ips && item.resolved_ips.length ? `<span class="ip-list">IPs: ${escapeHtml(item.resolved_ips.join(', '))}</span>` : ''}
-          </summary>
-          <div class="subdomain-content">
-            ${body}
-          </div>
-        </details>
-      `
-    }).join('')
-
-    const htmlContent = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Batch Subdomain Scan Report</title>
-<style>${SCAN_REPORT_STYLES}</style>
-</head>
-<body>
-  <div class="container">
-    <div class="header" style="background: linear-gradient(135deg, #0d9488 0%, #06b6d4 100%);">
-      <div class="subtitle">Batch Subdomain Scan Report</div>
-      <h1>🧭 ${rows.length} Subdomains Scanned</h1>
-      <div class="meta-grid">
-        <div class="meta-item">
-          <span class="label">Total Subdomains</span>
-          <span class="value">${results.total_subdomains}</span>
-        </div>
-        <div class="meta-item">
-          <span class="label">Completed</span>
-          <span class="value">${results.completed_scans}</span>
-        </div>
-        <div class="meta-item">
-          <span class="label">Failed</span>
-          <span class="value">${results.failed_scans}</span>
-        </div>
-        <div class="meta-item">
-          <span class="label">Generated</span>
-          <span class="value">${escapeHtml(new Date().toLocaleString())}</span>
-        </div>
-      </div>
-    </div>
-    ${subdomainSections}
-  </div>
-</body>
-</html>`
+    const htmlContent = buildBatchScanReportBody(mappedResults, {
+      title: 'Batch Subdomain Scan Report',
+      subtitle: 'Batch Subdomain Scan Report',
+    })
 
     const blob = new Blob([htmlContent], { type: 'text/html' })
     const url = URL.createObjectURL(blob)

@@ -157,3 +157,84 @@ def send_otp_email(to_email: str, otp: str, full_name: str = "User") -> None:
         raise RuntimeError(f"Email address '{to_email}' was rejected by the mail server.")
     except Exception as e:
         raise RuntimeError(f"Failed to send verification email: {type(e).__name__}: {str(e)}")
+
+
+def send_password_reset_otp_email(to_email: str, otp: str, full_name: str = "User") -> None:
+    """
+    Send an HTML password-reset OTP email via SMTP with STARTTLS.
+    Same delivery mechanics as send_otp_email, distinct copy so a reset
+    code doesn't read as "complete your registration".
+    Raises ValueError if SMTP is not configured.
+    Raises RuntimeError if sending fails.
+    """
+    if not SMTP_USER or not SMTP_PASS:
+        raise ValueError(
+            "Email service not configured. "
+            "Set SMTP_USER and SMTP_PASS in your backend/.env file. "
+            "For Gmail, create an App Password at: "
+            "Google Account → Security → 2-Step Verification → App Passwords."
+        )
+
+    year = time.strftime("%Y")
+
+    html_body = f"""<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:'Segoe UI',Arial,sans-serif;">
+  <div style="max-width:480px;margin:40px auto;padding:32px;">
+
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="background:linear-gradient(135deg,#ea580c,#f59e0b);width:60px;height:60px;border-radius:50%;margin:0 auto 14px;line-height:60px;text-align:center;font-size:28px;">
+        🔑
+      </div>
+      <h1 style="color:#1e293b;font-size:22px;margin:0;font-weight:900;letter-spacing:-0.5px;">Reconnaissance Tool</h1>
+      <p style="color:#94a3b8;font-size:11px;margin:6px 0 0;text-transform:uppercase;letter-spacing:3px;">Password Reset</p>
+    </div>
+
+    <div style="background:white;border-radius:14px;padding:30px;border:1px solid #e2e8f0;box-shadow:0 2px 12px rgba(0,0,0,0.05);">
+      <p style="color:#374151;font-size:15px;margin:0 0 6px;">Hello, <strong>{full_name}</strong>!</p>
+      <p style="color:#6b7280;font-size:14px;margin:0 0 26px;line-height:1.6;">
+        We received a request to reset your password. Enter the code below to continue.
+      </p>
+
+      <div style="background:#fff7ed;border:2px dashed #fed7aa;border-radius:12px;padding:26px;text-align:center;margin-bottom:26px;">
+        <div style="font-size:46px;font-weight:900;letter-spacing:16px;color:#ea580c;font-family:monospace;">
+          {otp}
+        </div>
+      </div>
+
+      <div style="background:#f1f5f9;border-radius:8px;padding:14px 16px;">
+        <p style="color:#64748b;font-size:12px;margin:0;line-height:1.8;">
+          ⏱ <strong>Expires in 10 minutes</strong><br>
+          🔒 If you didn't request this, you can safely ignore this email — your password won't be changed.
+        </p>
+      </div>
+    </div>
+
+    <p style="color:#cbd5e1;font-size:11px;text-align:center;margin-top:22px;">
+      Reconnaissance Tool © {year} — Host Diagnostics Platform
+    </p>
+  </div>
+</body>
+</html>"""
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = "🔑 Reset Your Password — Reconnaissance Tool"
+    msg["From"] = SMTP_FROM or SMTP_USER
+    msg["To"] = to_email
+    msg.attach(MIMEText(html_body, "html"))
+
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
+            server.ehlo()
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASS)
+            server.sendmail(msg["From"], to_email, msg.as_string())
+    except smtplib.SMTPAuthenticationError:
+        raise RuntimeError(
+            "SMTP login failed. Check SMTP_USER and SMTP_PASS in .env. "
+            "For Gmail, use a 16-character App Password, not your account password."
+        )
+    except smtplib.SMTPRecipientsRefused:
+        raise RuntimeError(f"Email address '{to_email}' was rejected by the mail server.")
+    except Exception as e:
+        raise RuntimeError(f"Failed to send password reset email: {type(e).__name__}: {str(e)}")

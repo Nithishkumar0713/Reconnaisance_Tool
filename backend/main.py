@@ -1186,7 +1186,7 @@ class SubdomainBatchRequest(BaseModel):
 async def start_subdomain_batch(
     request: SubdomainBatchRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Start batch scanning of discovered subdomains (optimized for 64GB RAM systems).
@@ -1202,7 +1202,16 @@ async def start_subdomain_batch(
     if not request.subdomains:
         raise HTTPException(status_code=400, detail="No subdomains provided")
 
-    parent_scan = db.query(ScanHistory).filter(ScanHistory.id == request.parent_scan_id).first()
+    # Ownership check, not just existence: a frontend bug (fixed alongside
+    # this) could send a parent_scan_id belonging to a different user — the
+    # backend accepted it silently before this check, which is how a real
+    # batch ended up attached to another account's scan and became invisible
+    # in the requesting user's own history. 404 (not 403) so this endpoint
+    # doesn't reveal whether a given scan id exists for someone else.
+    parent_scan = db.query(ScanHistory).filter(
+        ScanHistory.id == request.parent_scan_id,
+        ScanHistory.user_id == current_user.id
+    ).first()
     if not parent_scan:
         raise HTTPException(status_code=404, detail="Parent scan not found")
 

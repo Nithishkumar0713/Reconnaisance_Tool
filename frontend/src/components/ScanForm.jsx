@@ -435,12 +435,12 @@ export default function ScanForm({ onSubmit, onSubmitBatch, onSelectModule }) {
                 <input
                   type="range"
                   min={1}
-                  max={mode === 'deep' ? 5 : 8}
-                  value={batchMaxConcurrent || (mode === 'deep' ? 3 : 6)}
+                  max={5}
+                  value={batchMaxConcurrent || (mode === 'deep' ? 3 : 5)}
                   onChange={(e) => setBatchMaxConcurrent(Number(e.target.value))}
                   className="w-24 accent-teal-600"
                 />
-                <span className="mono text-teal-700 font-bold w-4 text-center">{batchMaxConcurrent || (mode === 'deep' ? 3 : 6)}</span>
+                <span className="mono text-teal-700 font-bold w-4 text-center">{batchMaxConcurrent || (mode === 'deep' ? 3 : 5)}</span>
               </label>
             </div>
           </div>

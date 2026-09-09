@@ -9,9 +9,28 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User, LoginHistory
 from auth import hash_password, verify_password, create_access_token, get_current_user
-from email_service import store_otp, verify_otp, send_otp_email
+from email_service import store_otp, verify_otp, send_otp_email, send_password_reset_otp_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _validate_password_strength(v: str) -> str:
+    """Shared password-strength rule, used by both registration and password reset."""
+    import re
+    errors = []
+    if len(v) < 8:
+        errors.append("at least 8 characters")
+    if len(v) > 72:
+        raise ValueError("Password cannot be longer than 72 characters.")
+    if not re.search(r"[A-Z]", v):
+        errors.append("one uppercase letter")
+    if not re.search(r"[0-9]", v):
+        errors.append("one number")
+    if not re.search(r"[!@#$%^&*()_+\-=\[\]{};':\"\\\|,.<>\/?`~]", v):
+        errors.append("one special character")
+    if errors:
+        raise ValueError("Password must contain: " + ", ".join(errors) + ".")
+    return v
 
 
 
@@ -38,21 +57,7 @@ class RegisterRequest(BaseModel):
     @field_validator("password")
     @classmethod
     def password_strength(cls, v: str) -> str:
-        import re
-        errors = []
-        if len(v) < 8:
-            errors.append("at least 8 characters")
-        if len(v) > 72:
-            raise ValueError("Password cannot be longer than 72 characters.")
-        if not re.search(r"[A-Z]", v):
-            errors.append("one uppercase letter")
-        if not re.search(r"[0-9]", v):
-            errors.append("one number")
-        if not re.search(r"[!@#$%^&*()_+\-=\[\]{};':\"\\\|,.<>\/?`~]", v):
-            errors.append("one special character")
-        if errors:
-            raise ValueError("Password must contain: " + ", ".join(errors) + ".")
-        return v
+        return _validate_password_strength(v)
 
     @field_validator("full_name")
     @classmethod
@@ -73,6 +78,31 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Request body for triggering a password-reset OTP email."""
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    """Request body for completing a password reset with a verified OTP."""
+    email: EmailStr
+    otp: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        return _validate_password_strength(v)
+
+    @field_validator("otp")
+    @classmethod
+    def otp_format(cls, v: str) -> str:
+        v = v.strip()
+        if not v.isdigit() or len(v) != 6:
+            raise ValueError("OTP must be exactly 6 digits.")
+        return v
 
 
 class AuthResponse(BaseModel):
@@ -194,6 +224,57 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
         full_name=user.full_name,
         email=user.email,
     )
+
+
+@router.post("/forgot-password", status_code=200)
+def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """
+    Send a password-reset OTP to an existing account's email.
+    Reveals whether the email is registered (matches this app's existing
+    /auth/send-otp behavior, which does the same for registration) rather
+    than a generic "if this email exists" response.
+    """
+    user = db.query(User).filter(User.email == body.email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found with this email address.",
+        )
+
+    try:
+        otp = store_otp(body.email)
+        send_password_reset_otp_email(body.email, otp, user.full_name)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
+
+    return {"message": "A password reset code has been sent. Please check your inbox (and spam folder)."}
+
+
+@router.post("/reset-password", status_code=200)
+def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """
+    Complete a password reset: verify the OTP sent via /auth/forgot-password,
+    then update the account's password hash. Does not issue a token — the
+    user signs in fresh with the new password, same as after registration.
+    """
+    try:
+        verify_otp(body.email, body.otp)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    user = db.query(User).filter(User.email == body.email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found with this email address.",
+        )
+
+    user.password_hash = hash_password(body.new_password)
+    db.commit()
+
+    return {"message": "Password reset successful. Please sign in with your new password."}
 
 
 @router.get("/me", response_model=AuthResponse)

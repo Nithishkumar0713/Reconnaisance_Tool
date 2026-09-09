@@ -53,6 +53,20 @@ export default function AuthPage({ onAuthSuccess, sessionExpiredReason }) {
   const [sendingOtp, setSendingOtp] = useState(false)
   const [otpCooldown, setOtpCooldown] = useState(0)
 
+  // Forgot-password: a self-contained 2-step flow shown in place of the
+  // login form (same left panel), so none of the isSignUp/sliding
+  // choreography above needs to change.
+  const [forgotStep, setForgotStep] = useState(null) // null | 'email' | 'otp'
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotOtp, setForgotOtp] = useState('')
+  const [forgotNewPassword, setForgotNewPassword] = useState('')
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('')
+  const [showForgotPass, setShowForgotPass] = useState(false)
+  const [showForgotConfirmPass, setShowForgotConfirmPass] = useState(false)
+  const [forgotLoading, setForgotLoading] = useState(false)
+  const [forgotCooldown, setForgotCooldown] = useState(0)
+  const [forgotError, setForgotError] = useState('')
+
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 20)
     return () => clearTimeout(t)
@@ -64,6 +78,12 @@ export default function AuthPage({ onAuthSuccess, sessionExpiredReason }) {
     return () => clearInterval(t)
   }, [otpCooldown])
 
+  useEffect(() => {
+    if (forgotCooldown <= 0) return
+    const t = setInterval(() => setForgotCooldown(prev => Math.max(0, prev - 1)), 1000)
+    return () => clearInterval(t)
+  }, [forgotCooldown])
+
   const validatePassword = (pass) => ({
     length:    pass.length >= 8,
     maxLength: pass.length <= 72,
@@ -73,6 +93,8 @@ export default function AuthPage({ onAuthSuccess, sessionExpiredReason }) {
   })
   const pwStatus = validatePassword(registerForm.password)
   const allPwMet = Object.values(pwStatus).every(Boolean)
+  const forgotPwStatus = validatePassword(forgotNewPassword)
+  const forgotAllPwMet = Object.values(forgotPwStatus).every(Boolean)
 
   const switchMode = (toSignUp) => {
     if (sliding || toSignUp === isSignUp) return
@@ -80,6 +102,7 @@ export default function AuthPage({ onAuthSuccess, sessionExpiredReason }) {
     setOtpSent(false)
     setOtpCode('')
     setOtpCooldown(0)
+    exitForgotFlow()
     setSliding(true)
     setTimeout(() => { setIsSignUp(toSignUp); setSliding(false) }, 350)
   }
@@ -94,6 +117,73 @@ export default function AuthPage({ onAuthSuccess, sessionExpiredReason }) {
     setCaptchaShake(true)
     setTimeout(() => setCaptchaShake(false), 500)
     refreshCaptcha()
+  }
+
+  const exitForgotFlow = () => {
+    setForgotStep(null)
+    setForgotEmail('')
+    setForgotOtp('')
+    setForgotNewPassword('')
+    setForgotConfirmPassword('')
+    setForgotError('')
+    setForgotCooldown(0)
+  }
+
+  const handleSendResetOtp = async (e) => {
+    if (e) e.preventDefault()
+    setForgotError('')
+    if (!forgotEmail.trim()) { setForgotError('Please enter your email address.'); return }
+
+    setForgotLoading(true)
+    try {
+      const res = await fetch(`${API_BASE}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail.trim() }),
+      }).catch(() => { throw new Error('Cannot reach backend — make sure the server is running on port 8000.') })
+      const data = await res.json().catch(() => ({ detail: 'Backend returned an unexpected response.' }))
+      if (!res.ok) throw new Error(data.detail || 'Failed to send reset code')
+      setForgotStep('otp')
+      setForgotCooldown(60)
+      setForgotOtp('')
+    } catch (err) {
+      setForgotError(err.message)
+    } finally {
+      setForgotLoading(false)
+    }
+  }
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault()
+    setForgotError('')
+    if (!forgotOtp.trim()) { setForgotError('Please enter the verification code.'); return }
+    if (!forgotAllPwMet) { setForgotError('Password does not meet all requirements.'); return }
+    if (forgotNewPassword !== forgotConfirmPassword) { setForgotError('Passwords do not match.'); return }
+
+    setForgotLoading(true)
+    try {
+      const res = await fetch(`${API_BASE}/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: forgotEmail.trim(),
+          otp: forgotOtp.trim(),
+          new_password: forgotNewPassword,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail || 'Password reset failed')
+
+      const resetEmail = forgotEmail.trim()
+      exitForgotFlow()
+      setLoginForm({ email: resetEmail, password: '' })
+      setSuccessMessage('Password reset successful! Please sign in with your new password.')
+      refreshCaptcha()
+    } catch (err) {
+      setForgotError(err.message)
+    } finally {
+      setForgotLoading(false)
+    }
   }
 
   const handleLogin = async (e) => {
@@ -277,99 +367,291 @@ export default function AuthPage({ onAuthSuccess, sessionExpiredReason }) {
               zIndex: 1,
             }}
           >
-            <h2 className="text-3xl font-black text-slate-800 mb-1">Welcome Back!</h2>
-            <p className="text-slate-400 text-sm mb-4 text-center">Sign in to continue your reconnaissance journey.</p>
+            {!forgotStep ? (
+              <>
+                <h2 className="text-3xl font-black text-slate-800 mb-1">Welcome Back!</h2>
+                <p className="text-slate-400 text-sm mb-4 text-center">Sign in to continue your reconnaissance journey.</p>
 
-            {sessionExpiredReason && (
-              <div className="w-full mb-3 p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold flex items-center gap-2 shadow-xs animate-fade-in">
-                <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                <span>{sessionExpiredReason}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleLogin} className="w-full flex flex-col gap-3">
-
-              <div>
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Email Address</label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="email"
-                    placeholder="Enter your email"
-                    value={loginForm.email}
-                    onChange={e => setLoginForm(p => ({ ...p, email: e.target.value }))}
-                    required
-                    className={inputCls}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Password</label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type={showPass ? 'text' : 'password'}
-                    placeholder="Enter your password"
-                    value={loginForm.password}
-                    onChange={e => setLoginForm(p => ({ ...p, password: e.target.value }))}
-                    required
-                    className={inputWithToggleCls}
-                  />
-                  <button type="button" onClick={() => setShowPass(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                    {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Security Check</label>
-                <div className={`flex items-center gap-2 ${captchaShake ? 'animate-[shake_0.5s_ease]' : ''}`}>
-                  <div className="flex-1 bg-orange-50 border-2 border-orange-200 rounded-lg px-3 py-2 flex items-center justify-center">
-                    <span className="font-black text-orange-700 text-base mono tracking-wider select-none">
-                      {captcha.a} {captcha.op} {captcha.b} = ?
-                    </span>
+                {sessionExpiredReason && (
+                  <div className="w-full mb-3 p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold flex items-center gap-2 shadow-xs animate-fade-in">
+                    <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                    <span>{sessionExpiredReason}</span>
                   </div>
-                  <input
-                    type="number"
-                    placeholder="Ans"
-                    value={captchaInput}
-                    onChange={e => setCaptchaInput(e.target.value)}
-                    required
-                    className="w-16 px-2 py-2 border border-slate-200 rounded-lg text-sm text-center font-bold focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-200 bg-slate-50 text-slate-800 transition"
-                  />
+                )}
+
+                <form onSubmit={handleLogin} className="w-full flex flex-col gap-3">
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Email Address</label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="email"
+                        placeholder="Enter your email"
+                        value={loginForm.email}
+                        onChange={e => setLoginForm(p => ({ ...p, email: e.target.value }))}
+                        required
+                        className={inputCls}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Password</label>
+                      <button
+                        type="button"
+                        onClick={() => { setError(''); setSuccessMessage(''); setForgotEmail(loginForm.email); setForgotStep('email') }}
+                        className="text-[11px] font-bold text-orange-500 hover:text-orange-700 transition"
+                      >
+                        Forgot password?
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type={showPass ? 'text' : 'password'}
+                        placeholder="Enter your password"
+                        value={loginForm.password}
+                        onChange={e => setLoginForm(p => ({ ...p, password: e.target.value }))}
+                        required
+                        className={inputWithToggleCls}
+                      />
+                      <button type="button" onClick={() => setShowPass(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                        {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Security Check</label>
+                    <div className={`flex items-center gap-2 ${captchaShake ? 'animate-[shake_0.5s_ease]' : ''}`}>
+                      <div className="flex-1 bg-orange-50 border-2 border-orange-200 rounded-lg px-3 py-2 flex items-center justify-center">
+                        <span className="font-black text-orange-700 text-base mono tracking-wider select-none">
+                          {captcha.a} {captcha.op} {captcha.b} = ?
+                        </span>
+                      </div>
+                      <input
+                        type="number"
+                        placeholder="Ans"
+                        value={captchaInput}
+                        onChange={e => setCaptchaInput(e.target.value)}
+                        required
+                        className="w-16 px-2 py-2 border border-slate-200 rounded-lg text-sm text-center font-bold focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-200 bg-slate-50 text-slate-800 transition"
+                      />
+                      <button
+                        type="button"
+                        onClick={refreshCaptcha}
+                        title="New question"
+                        className="p-2 rounded-lg border border-slate-200 hover:border-orange-300 hover:bg-orange-50 text-slate-400 hover:text-orange-500 transition"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full py-3 rounded-xl text-white font-bold text-sm tracking-wide mt-1 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                    style={{ background: 'linear-gradient(135deg, #ea580c, #f59e0b)' }}
+                  >
+                    {loading && !isSignUp ? 'Signing in...' : <><span>Sign In</span><ArrowRight className="w-4 h-4" /></>}
+                  </button>
+
+                  {successMessage && !isSignUp && (
+                    <div className="flex items-center gap-2 text-teal-700 text-xs font-semibold bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">
+                      <CheckCircle className="w-4 h-4 flex-shrink-0 text-teal-600" />{successMessage}
+                    </div>
+                  )}
+
+                  {error && !isSignUp && (
+                    <div className="flex items-center gap-2 text-red-500 text-xs font-semibold bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                      <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
+                    </div>
+                  )}
+                </form>
+              </>
+            ) : forgotStep === 'email' ? (
+              <form onSubmit={handleSendResetOtp} className="w-full flex flex-col items-center gap-4">
+                <div className="w-14 h-14 rounded-full bg-orange-50 border-2 border-orange-200 flex items-center justify-center">
+                  <KeyRound className="w-6 h-6 text-orange-500" />
+                </div>
+                <div className="text-center">
+                  <h2 className="text-2xl font-black text-slate-800 mb-1">Reset Password</h2>
+                  <p className="text-slate-400 text-sm">Enter your account email and we'll send you a verification code.</p>
+                </div>
+
+                <div className="w-full">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Email Address</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="email"
+                      placeholder="Enter your email"
+                      value={forgotEmail}
+                      onChange={e => setForgotEmail(e.target.value)}
+                      required
+                      autoFocus
+                      className={inputCls}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={forgotLoading}
+                  className="w-full py-3 rounded-xl text-white font-bold text-sm tracking-wide transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                  style={{ background: 'linear-gradient(135deg, #ea580c, #f59e0b)' }}
+                >
+                  {forgotLoading ? 'Sending Code...' : <><Mail className="w-4 h-4" /><span>Send Reset Code</span></>}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={exitForgotFlow}
+                  className="text-xs text-slate-400 hover:text-slate-600 font-semibold transition"
+                >
+                  ← Back to Sign In
+                </button>
+
+                {forgotError && (
+                  <div className="flex items-center gap-2 text-red-500 text-xs font-semibold bg-red-50 border border-red-200 rounded-lg px-3 py-2 w-full">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />{forgotError}
+                  </div>
+                )}
+              </form>
+            ) : (
+              <form onSubmit={handleResetPassword} className="w-full flex flex-col gap-3">
+                <div className="text-center mb-1">
+                  <h2 className="text-2xl font-black text-slate-800 mb-1">New Password</h2>
+                  <p className="text-slate-400 text-sm">We sent a 6-digit code to</p>
+                  <p className="text-orange-600 font-bold text-sm mt-0.5">{forgotEmail}</p>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block text-center">Verification Code</label>
+                  <div className="relative">
+                    <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      placeholder="• • • • • •"
+                      value={forgotOtp}
+                      onChange={e => setForgotOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      required
+                      autoFocus
+                      className="w-full pl-9 pr-4 py-2.5 border-2 border-slate-200 rounded-lg text-center text-xl font-black tracking-[0.4em] focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-200 bg-slate-50 text-slate-800 transition mono"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">New Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type={showForgotPass ? 'text' : 'password'}
+                      placeholder="Create a new password"
+                      value={forgotNewPassword}
+                      onChange={e => setForgotNewPassword(e.target.value)}
+                      required
+                      className={inputWithToggleCls}
+                    />
+                    <button type="button" onClick={() => setShowForgotPass(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                      {showForgotPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {forgotNewPassword && (
+                  <div className="text-[11px] p-2 bg-slate-50 border border-slate-200 rounded-lg flex flex-col gap-1 animate-fade-in">
+                    <div className="font-bold text-slate-400 uppercase tracking-wider text-[9px] mb-0.5">Requirements:</div>
+                    {[
+                      [forgotPwStatus.length,    'Min 8 characters'],
+                      [forgotPwStatus.maxLength, 'Max 72 characters'],
+                      [forgotPwStatus.uppercase, 'One uppercase (A-Z)'],
+                      [forgotPwStatus.number,    'One number (0-9)'],
+                      [forgotPwStatus.special,   'One special (!@#$%^ etc.)'],
+                    ].map(([ok, label]) => (
+                      <div key={label} className="flex items-center gap-1.5">
+                        <span className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${ok ? 'bg-teal-500 scale-110' : 'bg-red-300'}`} />
+                        <span className={ok ? 'text-teal-700 font-semibold' : 'text-slate-400'}>{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Confirm New Password</label>
+                    {forgotConfirmPassword && (
+                      forgotConfirmPassword === forgotNewPassword ? (
+                        <span className="text-[11px] font-bold text-teal-600 flex items-center gap-1">
+                          <CheckCircle className="w-3.5 h-3.5" />Matched
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-bold text-red-400">Doesn't match</span>
+                      )
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type={showForgotConfirmPass ? 'text' : 'password'}
+                      placeholder="Confirm your new password"
+                      value={forgotConfirmPassword}
+                      onChange={e => setForgotConfirmPassword(e.target.value)}
+                      required
+                      className={
+                        forgotConfirmPassword
+                          ? (forgotConfirmPassword === forgotNewPassword
+                              ? 'w-full pl-9 pr-10 py-2.5 border border-teal-300 rounded-lg text-sm focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-200 bg-teal-50/40 text-slate-800 transition'
+                              : 'w-full pl-9 pr-10 py-2.5 border border-red-200 rounded-lg text-sm focus:outline-none focus:border-red-300 focus:ring-1 focus:ring-red-100 bg-red-50/30 text-slate-800 transition')
+                          : inputWithToggleCls
+                      }
+                    />
+                    <button type="button" onClick={() => setShowForgotConfirmPass(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                      {showForgotConfirmPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={forgotLoading || forgotOtp.length < 6}
+                  className="w-full py-3 rounded-xl text-white font-bold text-sm tracking-wide mt-1 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                  style={{ background: 'linear-gradient(135deg, #ea580c, #f59e0b)' }}
+                >
+                  {forgotLoading ? 'Resetting...' : <><CheckCircle className="w-4 h-4" /><span>Reset Password</span></>}
+                </button>
+
+                <div className="flex items-center justify-between w-full">
                   <button
                     type="button"
-                    onClick={refreshCaptcha}
-                    title="New question"
-                    className="p-2 rounded-lg border border-slate-200 hover:border-orange-300 hover:bg-orange-50 text-slate-400 hover:text-orange-500 transition"
+                    onClick={() => { setForgotStep('email'); setForgotOtp(''); setForgotError('') }}
+                    className="text-xs text-slate-400 hover:text-slate-600 font-semibold transition"
                   >
-                    <RefreshCw className="w-4 h-4" />
+                    ← Change email
+                  </button>
+                  <button
+                    type="button"
+                    onClick={forgotCooldown > 0 ? undefined : handleSendResetOtp}
+                    disabled={forgotLoading || forgotCooldown > 0}
+                    className="text-xs text-orange-500 hover:text-orange-700 font-bold transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {forgotCooldown > 0 ? `Resend in ${forgotCooldown}s` : forgotLoading ? 'Sending...' : 'Resend Code'}
                   </button>
                 </div>
-              </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 rounded-xl text-white font-bold text-sm tracking-wide mt-1 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                style={{ background: 'linear-gradient(135deg, #ea580c, #f59e0b)' }}
-              >
-                {loading && !isSignUp ? 'Signing in...' : <><span>Sign In</span><ArrowRight className="w-4 h-4" /></>}
-              </button>
-
-              {successMessage && !isSignUp && (
-                <div className="flex items-center gap-2 text-teal-700 text-xs font-semibold bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">
-                  <CheckCircle className="w-4 h-4 flex-shrink-0 text-teal-600" />{successMessage}
-                </div>
-              )}
-
-              {error && !isSignUp && (
-                <div className="flex items-center gap-2 text-red-500 text-xs font-semibold bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
-                </div>
-              )}
-            </form>
+                {forgotError && (
+                  <div className="flex items-center gap-2 text-red-500 text-xs font-semibold bg-red-50 border border-red-200 rounded-lg px-3 py-2 w-full">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />{forgotError}
+                  </div>
+                )}
+              </form>
+            )}
           </div>
 
           <div
