@@ -5,11 +5,21 @@ content against a large technology signature catalog (backend/data/wappalyzer/
 — see NOTICE in that folder for where this data comes from) to pinpoint
 thousands of possible technologies along with version numbers, confidence
 levels, and detection evidence.
+
+About 46% of the catalog's ~7,200 technologies only carry a version/presence
+signal on a live JS runtime property (e.g. `React.version`, `jQuery.fn.jquery`)
+rather than anything visible in a static HTTP response — a plain aiohttp GET
+can never see those. When a headless-browser pass is available (see
+`_gather_js_properties`), this module renders the page once with Playwright
+and reads those properties directly out of the live `window` object, merging
+the result back into the same catalog-matching pipeline used for
+headers/cookies/html/meta/scriptSrc.
 """
 
 import asyncio
 import ipaddress
 import json
+import logging
 import os
 import re
 import ssl as ssl_mod
@@ -19,19 +29,21 @@ from urllib.parse import urlparse
 
 import aiohttp
 
+from utils.helpers import get_relaxed_ssl_context, get_safe_ssl_context
 from utils.safety import TIMEOUTS, ScanError, error_response
+
+logger = logging.getLogger(__name__)
 
 
 def _url_host(target: str) -> str:
     """Formats `target` for embedding directly in a URL string. A bare IPv6
     literal (e.g. "2404:6800:4007:808::200e") is only valid on the wire —
     inside a URL it's ambiguous with the ":port" separator, so RFC 3986
-    requires it be wrapped in brackets ("[2404:...::200e]"). Verified
-    directly: without this, yarl/aiohttp raises "Invalid URL: port can't be
-    converted to integer" on any raw IPv6 target, which is a legitimate,
-    reachable input here (classify_non_public_ip/is_valid_input both
-    already accept public IPv6 addresses). Domains and IPv4 literals pass
-    through unchanged."""
+    requires it be wrapped in brackets ("[2404:...::200e]"). Without this,
+    yarl/aiohttp raises "Invalid URL: port can't be converted to integer"
+    on any raw IPv6 target, which is a legitimate, reachable input here
+    (classify_non_public_ip/is_valid_input both already accept public
+    IPv6 addresses). Domains and IPv4 literals pass through unchanged."""
     try:
         ip_obj = ipaddress.ip_address(target)
     except ValueError:
@@ -143,6 +155,10 @@ def _compile_catalog_entry(name: str, entry: dict[str, Any], categories: dict[st
         "html": _parse_rule_pattern_list(entry.get("html")),
         "meta": {k.lower(): _parse_rule_pattern_list(v) for k, v in (entry.get("meta") or {}).items()},
         "scriptSrc": _parse_rule_pattern_list(entry.get("scriptSrc")),
+        # Property paths are case-sensitive JS identifiers (e.g.
+        # "React.version", "$.fn.jquery") — unlike headers/cookies/meta,
+        # never lowercase these.
+        "js": {k: _parse_rule_pattern_list(v) for k, v in (entry.get("js") or {}).items()},
     }
 
 
@@ -179,6 +195,26 @@ def _load_catalog() -> dict[str, dict[str, Any]]:
     return catalog
 
 
+_js_prop_paths_cache: list[str] | None = None
+
+
+def _collect_js_property_paths() -> list[str]:
+    """Every distinct JS property path referenced anywhere in the catalog
+    (e.g. "React.version", "$.fn.jquery") — computed once and cached, so
+    the browser only needs a single page.evaluate() call per scan to check
+    all of them at once instead of one round-trip per technology."""
+    global _js_prop_paths_cache
+    if _js_prop_paths_cache is not None:
+        return _js_prop_paths_cache
+
+    catalog = _load_catalog()
+    paths: set[str] = set()
+    for entry in catalog.values():
+        paths.update(entry.get("js", {}).keys())
+    _js_prop_paths_cache = sorted(paths)
+    return _js_prop_paths_cache
+
+
 def _rule_field_hit(patterns: list[_RulePattern], value: str) -> tuple[bool, int, str]:
     for p in patterns:
         if p.regex is None:
@@ -197,6 +233,7 @@ def _match_catalog(
     html: str = "",
     meta: dict[str, str] | None = None,
     script_srcs: list[str] | None = None,
+    js_properties: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """Evaluates every catalog entry's rules against the supplied signals
     and returns a confidence-sorted list of
@@ -206,6 +243,7 @@ def _match_catalog(
     cookies = {k.lower(): v for k, v in (cookies or {}).items()}
     meta = {k.lower(): v for k, v in (meta or {}).items()}
     script_srcs = (script_srcs or [])[:150]
+    js_properties = js_properties or {}  # case-sensitive keys — never lowercased
 
     results: dict[str, dict[str, Any]] = {}
 
@@ -262,6 +300,15 @@ def _match_catalog(
                 m = p.regex.search(html)
                 if m:
                     record_hit(name, p.confidence, _extract_rule_version(m, p.version_template), "html match")
+
+        if entry["js"] and js_properties:
+            for prop_path, patterns in entry["js"].items():
+                val = js_properties.get(prop_path)
+                if val is None:
+                    continue
+                matched, confidence, version = _rule_field_hit(patterns, val)
+                if matched:
+                    record_hit(name, confidence, version, f"js: {prop_path}")
 
         if entry["scriptSrc"] and script_srcs:
             for src in script_srcs:
@@ -428,85 +475,364 @@ def _extract_external_domains(body: str, base_host: str) -> list[str]:
     return sorted(list(domains))[:50]
 
 
-_PER_URL_TIMEOUT = max(10.0, TIMEOUTS.get("web_tech", 45) - 10)
+# Fixed, not derived from TIMEOUTS["web_tech"] — that budget now also has
+# to cover the JS-detection pass below (_JS_DETECTION_TIMEOUT), and coupling
+# this to it would let a single slow aiohttp fetch balloon far past what a
+# real HTTP GET ever needs.
+_PER_URL_TIMEOUT = 30.0
 
 _CATALOG_MATCH_HARD_TIMEOUT = 12.0
 
+# ── Playwright-driven JS-property detection ─────────────────────────────────
+#
+# ~46% of the catalog's technologies (see _collect_js_property_paths) only
+# carry a version/presence signal on a live `window.*` property — headers,
+# cookies, HTML and script filenames never expose it (e.g. React's version
+# lives at `React.version`, only set once React actually runs in a real
+# browser). This section renders the page once with headless Chromium and
+# reads those properties directly out of the live page, after the normal
+# aiohttp-based pass has already picked which URL variant is reachable.
+#
+# One browser process is shared process-wide (launching a new one per scan
+# would cost 1-2s just for the process spawn); _BROWSER_SEMAPHORE bounds how
+# many pages can be open in it at once, the same "module owns its own
+# concurrency limit" pattern already used for VirusTotal/AbuseIPDB pacing
+# and email_gather's scrape concurrency elsewhere in this codebase.
+
+# 15s looked fine in isolation but a real 5-target concurrent deep-scan
+# burst (port scan + directory enum + subdomain enum all competing for
+# DNS/CPU at once, see modules/web_tech.py's diagnostic notes) pushed real
+# page-load times past that. 25s was measured to comfortably cover that
+# same real burst.
+_JS_DETECTION_TIMEOUT = 25.0
+_BROWSER_CONCURRENCY = 4
+
+_playwright_ctx = None
+_browser = None
+_browser_lock = asyncio.Lock()
+_browser_semaphore = asyncio.Semaphore(_BROWSER_CONCURRENCY)
+
+_JS_EVAL_SCRIPT = """(paths) => {
+    const out = {};
+    for (const p of paths) {
+        try {
+            const parts = p.split('.');
+            let obj = window;
+            for (const part of parts) {
+                if (obj === null || obj === undefined) { obj = undefined; break; }
+                obj = obj[part];
+            }
+            if (obj === undefined || obj === null) continue;
+            const t = typeof obj;
+            if (t === 'string') out[p] = obj;
+            else if (t === 'number' || t === 'boolean') out[p] = String(obj);
+            else out[p] = '';
+        } catch (e) {}
+    }
+    return out;
+}"""
+
+
+async def _ensure_browser():
+    """Lazily launches the shared headless Chromium instance, reused for
+    the process lifetime. Returns None (never raises) if Playwright isn't
+    installed or the browser fails to launch — callers treat that as "no
+    JS evidence available" and fall back to the aiohttp-only detections."""
+    global _playwright_ctx, _browser
+    if _browser is not None:
+        return _browser
+    async with _browser_lock:
+        if _browser is not None:
+            return _browser
+        try:
+            from playwright.async_api import async_playwright
+            _playwright_ctx = await async_playwright().start()
+            _browser = await _playwright_ctx.chromium.launch(
+                headless=True,
+                args=["--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage"],
+            )
+        except Exception as e:
+            logger.warning(f"[web_tech] Headless browser unavailable, JS-based version detection disabled: {type(e).__name__}: {e}")
+            _playwright_ctx = None
+            _browser = None
+        return _browser
+
+
+async def close_browser() -> None:
+    """Called from the app's shutdown hook to release the browser cleanly."""
+    global _playwright_ctx, _browser
+    if _browser is not None:
+        try:
+            await _browser.close()
+        except Exception:
+            pass
+        _browser = None
+    if _playwright_ctx is not None:
+        try:
+            await _playwright_ctx.stop()
+        except Exception:
+            pass
+        _playwright_ctx = None
+
+
+async def _gather_js_properties(url: str, prop_paths: list[str]) -> tuple[dict[str, str], str | None]:
+    """Renders `url` in a fresh browser context and reads every property in
+    `prop_paths` off the live `window` object. Returns ({}, reason) on any
+    failure — a missing browser, a navigation error, or a slow/hung page all
+    degrade to "no JS evidence", never to a failed scan. The reason string
+    is surfaced on the result (see _augment_with_js_detection) purely for
+    diagnosability — earlier testing under real concurrent scan load (port
+    scan + directory enum + subdomain enum all competing for DNS at once)
+    showed this can legitimately come back empty, and debugging that with
+    zero visibility into *why* is exactly the kind of thing that should
+    never ship silent."""
+    if not prop_paths:
+        return {}, "no js-versioned technologies in catalog"
+    browser = await _ensure_browser()
+    if browser is None:
+        return {}, "browser unavailable"
+
+    async with _browser_semaphore:
+        context = None
+        try:
+            context = await browser.new_context(
+                ignore_https_errors=True,
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                ),
+            )
+            page = await context.new_page()
+            nav_ok = True
+            try:
+                # 15s, not the Playwright default 30s — bounded by
+                # _JS_DETECTION_TIMEOUT above regardless, but a real
+                # 5-concurrent-deep-scan burst (DNS contention from the
+                # scan's own port/subdomain/directory modules, see the
+                # module docstring) measured real page loads occasionally
+                # exceeding the previous 10s figure.
+                await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+                await page.wait_for_timeout(600)
+            except Exception as e:
+                nav_ok = False
+                logger.debug(f"[web_tech] JS-detection navigation to {url} failed, reading whatever loaded: {type(e).__name__}: {e}")
+
+            # Real testing under concurrent load turned up pages that
+            # client-side-redirect shortly after domcontentloaded (consent
+            # banners, www/non-www bounces, SPA routers) — the evaluate()
+            # below can land exactly as that navigation tears down the JS
+            # context ("Execution context was destroyed"). That's a timing
+            # race, not a real failure, so it's worth exactly one retry
+            # after giving the new navigation a moment to settle, rather
+            # than reporting "no JS evidence" for something the page
+            # would've happily answered a few hundred ms later.
+            try:
+                values = await page.evaluate(_JS_EVAL_SCRIPT, prop_paths)
+            except Exception as e:
+                if "Execution context was destroyed" not in str(e):
+                    raise
+                logger.debug(f"[web_tech] JS eval hit a mid-flight navigation on {url}, retrying once")
+                await page.wait_for_timeout(600)
+                values = await page.evaluate(_JS_EVAL_SCRIPT, prop_paths)
+            if not values:
+                return {}, ("page loaded but no catalog js-properties were set" if nav_ok else "navigation failed before any script executed")
+            return values, None
+        except Exception as e:
+            logger.debug(f"[web_tech] JS-detection failed for {url}: {type(e).__name__}: {e}")
+            return {}, f"{type(e).__name__}: {e}"[:150]
+        finally:
+            if context is not None:
+                try:
+                    await context.close()
+                except Exception:
+                    pass
+
+
+async def _augment_with_js_detection(result: dict[str, Any], raw: dict[str, Any]) -> dict[str, Any]:
+    """Re-runs catalog matching with live JS-property evidence added to the
+    signals already gathered over HTTP, and merges the (usually richer)
+    result back in. Any failure along the way just returns `result` with
+    js_detection=False and a short note — this is a best-effort enhancement,
+    never a hard dependency, but always reports its own outcome rather than
+    silently doing nothing."""
+    prop_paths = _collect_js_property_paths()
+    try:
+        js_properties, note = await asyncio.wait_for(
+            _gather_js_properties(result["url_used"], prop_paths),
+            timeout=_JS_DETECTION_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        result["js_detection"] = False
+        result["js_detection_note"] = f"timed out after {_JS_DETECTION_TIMEOUT:.0f}s"
+        return result
+    except Exception as e:
+        result["js_detection"] = False
+        result["js_detection_note"] = f"{type(e).__name__}: {e}"[:150]
+        return result
+
+    if not js_properties:
+        result["js_detection"] = False
+        result["js_detection_note"] = note or "no JS evidence found"
+        return result
+
+    loop = asyncio.get_event_loop()
+    try:
+        detections = await asyncio.wait_for(
+            loop.run_in_executor(
+                None,
+                lambda: _match_catalog(
+                    url=raw["url"],
+                    headers=raw["headers"],
+                    cookies=raw["cookies"],
+                    html=raw["html"],
+                    meta=raw["meta"],
+                    script_srcs=raw["script_srcs"],
+                    js_properties=js_properties,
+                ),
+            ),
+            timeout=_CATALOG_MATCH_HARD_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        result["js_detection"] = False
+        result["js_detection_note"] = "catalog re-match timed out"
+        return result
+
+    legacy_tech, components = _build_components(detections)
+    version_count = sum(1 for c in components if c["version"] != "Unknown")
+    result["technologies"] = legacy_tech
+    result["detected_components"] = components
+    result["tech_summary"] = {
+        "total_detected": len(components),
+        "version_count": version_count,
+        "categories_count": len(set(c["category"] for c in components)),
+    }
+    result["js_detection"] = True
+    return result
+
+
+async def _fetch_and_match(
+    session: aiohttp.ClientSession,
+    url: str,
+    per_url_timeout: aiohttp.ClientTimeout,
+    ssl_ctx,
+    weak_tls_downgrade: bool,
+) -> dict[str, Any]:
+    """One fetch-and-match attempt against `url` with the given SSL context.
+    Split out of _try_url so it can be tried once with a standards-compliant
+    context and, only on that specific failure, retried once more with a
+    relaxed one (see _try_url)."""
+    async with session.get(url, ssl=ssl_ctx, allow_redirects=True, timeout=per_url_timeout) as response:
+        body = await response.text(errors="ignore")
+        headers_dict = dict(response.headers)
+        body_slice = body[:180000]
+        cookies_dict = {name: morsel.value for name, morsel in response.cookies.items()}
+
+        meta_all = _extract_all_meta(body_slice)
+        script_srcs = _extract_script_srcs(body_slice)
+
+        loop = asyncio.get_event_loop()
+        try:
+            detections = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None,
+                    lambda: _match_catalog(
+                        url=str(response.url),
+                        headers=headers_dict,
+                        cookies=cookies_dict,
+                        html=body_slice,
+                        meta=meta_all,
+                        script_srcs=script_srcs,
+                    ),
+                ),
+                timeout=_CATALOG_MATCH_HARD_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            detections = []
+
+        legacy_tech, components = _build_components(detections)
+        meta = _extract_meta_tags(body_slice)
+        parsed = urlparse(str(response.url))
+        base_host = parsed.netloc.lower()
+        external_domains = _extract_external_domains(body_slice, base_host)
+
+        inline_scripts = len(re.findall(r"<script(?:\s[^>]*)?>", body_slice, re.IGNORECASE))
+        external_scripts = len(re.findall(r'<script\s[^>]*src=["\']', body_slice, re.IGNORECASE))
+
+        version_count = sum(1 for c in components if c["version"] != "Unknown")
+
+        result = {
+            "status": "ok",
+            "url_used": str(response.url),
+            "http_status": response.status,
+            "technologies": legacy_tech,
+            "detected_components": components,
+            "tech_summary": {
+                "total_detected": len(components),
+                "version_count": version_count,
+                "categories_count": len(set(c["category"] for c in components)),
+            },
+            "page_meta": meta,
+            "external_domains": external_domains,
+            "external_domain_count": len(external_domains),
+            "inline_scripts": inline_scripts,
+            "external_scripts": external_scripts,
+            "meta": {
+                "server": response.headers.get("Server"),
+                "powered_by": response.headers.get("X-Powered-By"),
+                "content_type": response.headers.get("Content-Type"),
+                "content_length": response.headers.get("Content-Length"),
+            },
+            # Consumed by detect() to re-run catalog matching with JS
+            # evidence added, then stripped before the result is returned.
+            "_raw_signals": {
+                "url": str(response.url),
+                "headers": headers_dict,
+                "cookies": cookies_dict,
+                "html": body_slice,
+                "meta": meta_all,
+                "script_srcs": script_srcs,
+            },
+        }
+        if weak_tls_downgrade:
+            result["weak_tls_downgrade"] = True
+            result["weak_tls_note"] = (
+                "A standards-compliant TLS client refuses this server's certificate/handshake "
+                "(e.g. an undersized DH key) — but a more permissive client (matching what curl / "
+                "most browsers accept) can still connect, and got the response shown here. "
+                "The server's TLS configuration doesn't meet modern security standards."
+            )
+        return result
+
 
 async def _try_url(session: aiohttp.ClientSession, url: str) -> dict[str, Any] | None:
-    """Fetches one URL and runs the full signature match + metadata extraction pipeline.
-    Returns None on any failure so the caller can just try the next URL variant."""
+    """Fetches one URL and runs the full signature match + metadata extraction
+    pipeline. Tries a standards-compliant TLS context first; only on an SSL
+    handshake failure specifically (e.g. a legacy server's undersized DH key
+    — confirmed against a real government-domain target, reachable to curl
+    but hard-refused here by Python's default OpenSSL security level) does
+    it retry once with a deliberately relaxed context, mirroring
+    http_availability.py's _check_port_verified pattern — so weak-TLS
+    targets still get fingerprinted instead of silently reading as
+    unreachable, and the downgrade itself is reported, not hidden.
+    Returns None on any other failure so the caller can just try the next
+    URL variant."""
+    per_url_timeout = aiohttp.ClientTimeout(total=_PER_URL_TIMEOUT, connect=8, sock_read=15)
     try:
-        per_url_timeout = aiohttp.ClientTimeout(total=_PER_URL_TIMEOUT, connect=8, sock_read=15)
-        async with session.get(url, ssl=False, allow_redirects=True, timeout=per_url_timeout) as response:
-            body = await response.text(errors="ignore")
-            headers_dict = dict(response.headers)
-            body_slice = body[:180000]
-            cookies_dict = {name: morsel.value for name, morsel in response.cookies.items()}
-
-            meta_all = _extract_all_meta(body_slice)
-            script_srcs = _extract_script_srcs(body_slice)
-
-            loop = asyncio.get_event_loop()
-            try:
-                detections = await asyncio.wait_for(
-                    loop.run_in_executor(
-                        None,
-                        lambda: _match_catalog(
-                            url=str(response.url),
-                            headers=headers_dict,
-                            cookies=cookies_dict,
-                            html=body_slice,
-                            meta=meta_all,
-                            script_srcs=script_srcs,
-                        ),
-                    ),
-                    timeout=_CATALOG_MATCH_HARD_TIMEOUT,
-                )
-            except asyncio.TimeoutError:
-                detections = []
-
-            legacy_tech, components = _build_components(detections)
-            meta = _extract_meta_tags(body_slice)
-            parsed = urlparse(str(response.url))
-            base_host = parsed.netloc.lower()
-            external_domains = _extract_external_domains(body_slice, base_host)
-
-            inline_scripts = len(re.findall(r"<script(?:\s[^>]*)?>", body_slice, re.IGNORECASE))
-            external_scripts = len(re.findall(r'<script\s[^>]*src=["\']', body_slice, re.IGNORECASE))
-
-            version_count = sum(1 for c in components if c["version"] != "Unknown")
-
-            return {
-                "status": "ok",
-                "url_used": str(response.url),
-                "http_status": response.status,
-                "technologies": legacy_tech,
-                "detected_components": components,
-                "tech_summary": {
-                    "total_detected": len(components),
-                    "version_count": version_count,
-                    "categories_count": len(set(c["category"] for c in components)),
-                },
-                "page_meta": meta,
-                "external_domains": external_domains,
-                "external_domain_count": len(external_domains),
-                "inline_scripts": inline_scripts,
-                "external_scripts": external_scripts,
-                "meta": {
-                    "server": response.headers.get("Server"),
-                    "powered_by": response.headers.get("X-Powered-By"),
-                    "content_type": response.headers.get("Content-Type"),
-                    "content_length": response.headers.get("Content-Length"),
-                },
-            }
+        return await _fetch_and_match(session, url, per_url_timeout, get_safe_ssl_context(), False)
+    except aiohttp.ClientConnectorSSLError:
+        try:
+            return await _fetch_and_match(session, url, per_url_timeout, get_relaxed_ssl_context(), True)
+        except (asyncio.TimeoutError, aiohttp.ClientConnectorError, ssl_mod.SSLError):
+            return None
+        except Exception:
+            return None
     except (asyncio.TimeoutError, aiohttp.ClientConnectorError, ssl_mod.SSLError):
         return None
     except Exception:
         return None
 
 
-async def detect(target: str) -> dict[str, Any]:
+async def detect(target: str, enable_js_detection: bool = True) -> dict[str, Any]:
     """Main entry point — tries https/http and bare/www host combos
     *concurrently*, preferring the first successful result in that exact
     priority order (https bare host first, then http bare, then the www.
@@ -515,11 +841,18 @@ async def detect(target: str) -> dict[str, Any]:
     single attempt's timeout instead of the sum of up to four — the same
     fix already applied to http_headers.py's fetch(), for the same reason:
     this whole function is wrapped in a fixed TIMEOUTS["web_tech"] budget
-    (45s) by both the full-scan and any batch run, so stacking sequential
+    by both the full-scan and any batch run, so stacking sequential
     attempts risks that outer timeout cutting off a later attempt that
     might have succeeded. asyncio.gather preserves input order in its
     results regardless of which attempt finishes first, so the
-    priority-order selection below still works the same as before."""
+    priority-order selection below still works the same as before.
+
+    Once a reachable URL variant wins that race, and only if
+    `enable_js_detection` is True, one extra pass (_augment_with_js_detection)
+    renders that specific URL in a real browser to pick up version/presence
+    signals that only exist on the live page (see module docstring) —
+    callers that only want the fast, passive HTTP-only signals (e.g. a
+    fast-mode scan) can pass enable_js_detection=False to skip it."""
     target_clean = target.replace("https://", "").replace("http://", "").split("/")[0]
     host = _url_host(target_clean)
     try:
@@ -532,8 +865,10 @@ async def detect(target: str) -> dict[str, Any]:
     if not target_is_ip and not target_clean.startswith("www."):
         urls_to_try.extend([f"https://www.{target_clean}", f"http://www.{target_clean}"])
 
-    timeout = aiohttp.ClientTimeout(total=TIMEOUTS.get("web_tech", 45), connect=6, sock_read=10)
-    connector = aiohttp.TCPConnector(limit=70, limit_per_host=5, ssl=False)
+    timeout = aiohttp.ClientTimeout(total=_PER_URL_TIMEOUT, connect=6, sock_read=10)
+    # Per-request ssl= (see _try_url/_fetch_and_match) always overrides this
+    # connector default, so this is only ever a fallback.
+    connector = aiohttp.TCPConnector(limit=70, limit_per_host=5, ssl=get_safe_ssl_context())
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
@@ -547,6 +882,9 @@ async def detect(target: str) -> dict[str, Any]:
                 if isinstance(result, BaseException):
                     continue
                 if result:
+                    raw = result.pop("_raw_signals", None)
+                    if enable_js_detection and raw is not None:
+                        result = await _augment_with_js_detection(result, raw)
                     return result
     except asyncio.TimeoutError:
         pass

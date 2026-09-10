@@ -2,6 +2,9 @@
 auth_router.py — FastAPI router for /auth/send-otp, /auth/register and /auth/login endpoints.
 """
 
+import time
+from collections import defaultdict
+
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy.orm import Session
@@ -12,6 +15,32 @@ from auth import hash_password, verify_password, create_access_token, get_curren
 from email_service import store_otp, verify_otp, send_otp_email, send_password_reset_otp_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+# Simple in-memory, per-IP sliding-window rate limiter for the auth
+# endpoints below. None of them had any throttling before this — /login in
+# particular allowed unlimited password guesses against any account. This
+# is deliberately lightweight (no new dependency, no shared state beyond
+# this process) rather than a full distributed rate limiter — proportionate
+# to a single-process deployment; would need revisiting behind a
+# multi-worker/load-balanced setup.
+_rate_limit_buckets: dict[str, list[float]] = defaultdict(list)
+
+
+def _enforce_rate_limit(request: Request, bucket: str, max_attempts: int, window_seconds: float) -> None:
+    ip = request.client.host if request.client else "unknown"
+    key = f"{bucket}:{ip}"
+    now = time.monotonic()
+    timestamps = _rate_limit_buckets[key]
+    cutoff = now - window_seconds
+    while timestamps and timestamps[0] < cutoff:
+        timestamps.pop(0)
+    if len(timestamps) >= max_attempts:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many attempts. Please wait a few minutes and try again.",
+        )
+    timestamps.append(now)
 
 
 def _validate_password_strength(v: str) -> str:
@@ -115,11 +144,12 @@ class AuthResponse(BaseModel):
 
 
 @router.post("/send-otp", status_code=200)
-def send_otp_endpoint(body: SendOtpRequest, db: Session = Depends(get_db)):
+def send_otp_endpoint(body: SendOtpRequest, request: Request, db: Session = Depends(get_db)):
     """
     Generate a 6-digit OTP and email it to the provided address.
     Rejects if email is already registered or if cooldown hasn't elapsed.
     """
+    _enforce_rate_limit(request, "send-otp", max_attempts=5, window_seconds=600)
     existing = db.query(User).filter(User.email == body.email).first()
     if existing:
         raise HTTPException(
@@ -145,6 +175,7 @@ def register(body: RegisterRequest, request: Request, db: Session = Depends(get_
     Requires a valid OTP previously sent via /auth/send-otp.
     Returns a JWT access token immediately so the user is logged in straight away.
     """
+    _enforce_rate_limit(request, "register", max_attempts=10, window_seconds=3600)
     try:
         verify_otp(body.email, body.otp)
     except ValueError as e:
@@ -192,6 +223,10 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
     Authenticate an existing user.
     Returns a JWT access token on success.
     """
+    # Previously unthrottled — unlimited password guesses against any
+    # account. 10/5min per IP is generous for real typos, tight enough to
+    # blunt brute-force/credential-stuffing.
+    _enforce_rate_limit(request, "login", max_attempts=10, window_seconds=300)
     user = db.query(User).filter(User.email == body.email).first()
 
     if not user or not verify_password(body.password, user.password_hash):
@@ -227,13 +262,14 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
 
 
 @router.post("/forgot-password", status_code=200)
-def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db)):
+def forgot_password(body: ForgotPasswordRequest, request: Request, db: Session = Depends(get_db)):
     """
     Send a password-reset OTP to an existing account's email.
     Reveals whether the email is registered (matches this app's existing
     /auth/send-otp behavior, which does the same for registration) rather
     than a generic "if this email exists" response.
     """
+    _enforce_rate_limit(request, "forgot-password", max_attempts=5, window_seconds=3600)
     user = db.query(User).filter(User.email == body.email).first()
     if not user:
         raise HTTPException(
@@ -253,12 +289,15 @@ def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/reset-password", status_code=200)
-def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
+def reset_password(body: ResetPasswordRequest, request: Request, db: Session = Depends(get_db)):
     """
     Complete a password reset: verify the OTP sent via /auth/forgot-password,
     then update the account's password hash. Does not issue a token — the
     user signs in fresh with the new password, same as after registration.
     """
+    # verify_otp already locks out after MAX_ATTEMPTS (5) wrong guesses per
+    # email — this is a second, IP-scoped layer on top of that.
+    _enforce_rate_limit(request, "reset-password", max_attempts=10, window_seconds=3600)
     try:
         verify_otp(body.email, body.otp)
     except ValueError as e:

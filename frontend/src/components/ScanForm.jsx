@@ -408,11 +408,15 @@ export default function ScanForm({ onSubmit, onSubmitBatch, onSelectModule }) {
             {batchError && (
               <p className="text-xs text-red-600 font-semibold">{batchError}</p>
             )}
-            {!batchError && batchTargetCount > 0 && (
+            {!batchError && batchTargetCount > MAX_FULL_SCAN_BATCH_TARGETS && (
+              <p className="text-xs text-red-600 font-semibold">
+                Too many targets ({batchTargetCount}). Only {MAX_FULL_SCAN_BATCH_TARGETS} targets are allowed per batch — remove {batchTargetCount - MAX_FULL_SCAN_BATCH_TARGETS} to continue.
+              </p>
+            )}
+            {!batchError && batchTargetCount > 0 && batchTargetCount <= MAX_FULL_SCAN_BATCH_TARGETS && (
               <p className="text-xs text-slate-500 font-semibold">
                 {batchTargetCount} target{batchTargetCount === 1 ? '' : 's'}
-                {batchTargetCount > MAX_FULL_SCAN_BATCH_TARGETS ? ` — maximum is ${MAX_FULL_SCAN_BATCH_TARGETS}` : ''}
-                {batchEtaSeconds != null && batchTargetCount <= MAX_FULL_SCAN_BATCH_TARGETS && (
+                {batchEtaSeconds != null && (
                   <> — est. {formatEta(batchEtaSeconds)}{mode === 'deep' && batchIncludeReputation ? ' (VirusTotal allows ~4 checks/min)' : ''}</>
                 )}
               </p>

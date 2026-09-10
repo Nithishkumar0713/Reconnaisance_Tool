@@ -169,18 +169,13 @@ async def _fetch_page(session: aiohttp.ClientSession, url: str) -> dict | None:
 
 def _random_bogus_path() -> str:
     """Generates an unpredictable, guaranteed-nonexistent path to use as a
-    baseline probe. Verified directly against a real target
-    (chatgpt.com, behind Cloudflare): every single CMS path-existence
-    check (Rule 4 below) came back 2xx/3xx simultaneously — WordPress,
-    Joomla, TYPO3, PrestaShop, WooCommerce, Drupal, and Magento all
-    "detected" on the same site at once, which is obviously impossible.
-    The site is a "soft-404" target — it returns a success status for any
-    path regardless of whether it's real (common for SPA catch-all
-    routing, or a WAF/CDN quirk) — so a bare status-code check can't tell
-    a genuine CMS path apart from nothing at all. Probing one random path
-    up front and checking whether *it* also "succeeds" detects this before
-    it can produce a false positive, the same baseline-calibration
-    technique tools like ffuf/gobuster use."""
+    baseline probe. Some targets are a "soft-404" site — returning a
+    success status for any path regardless of whether it's real (common
+    for SPA catch-all routing, or a WAF/CDN quirk) — which would otherwise
+    make every CMS path-existence check (Rule 4 below) "detect" every CMS
+    at once. Probing one random path up front and checking whether *it*
+    also "succeeds" catches this before it can produce a false positive,
+    the same baseline-calibration technique tools like ffuf/gobuster use."""
     token = uuid.uuid4().hex[:20]
     return f"/__recon_baseline_check_{token}__/"
 

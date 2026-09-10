@@ -6,8 +6,7 @@ open ports Shodan's own internet-wide scanner has found, detected CPEs
 This is passive/historical data from Shodan's own scans — a different
 vantage point than our own live port probe, useful for cross-referencing.
 
-No API key required (internetdb.shodan.io is public and keyless — verified
-directly, response headers show Access-Control-Allow-Origin: *). But a 404
+No API key required (internetdb.shodan.io is public and keyless). But a 404
 from this endpoint is ambiguous: it means either "nothing indexed for this
 real target" or "the input itself was junk" (private IP, malformed string,
 even a domain name — this endpoint is IP-only). Shodan doesn't distinguish
@@ -25,13 +24,10 @@ import aiohttp
 from modules.port_scanner import SERVICE_NAMES
 from utils.safety import TIMEOUTS, ScanError, error_response
 
-# internetdb.shodan.io has no documented rate limit (it's free and keyless),
-# but verified directly: 2 of 3 simultaneous requests from this same source
-# IP (one per concurrent target in a full-scan batch) both timed out in the
-# same wave while the 3rd succeeded — consistent with the service itself
-# having some real, undocumented concurrent-request ceiling. Bounding how
-# many requests fire at once, process-wide, keeps us under whatever that
-# ceiling actually is instead of finding out the hard way each time.
+# internetdb.shodan.io has no documented rate limit (it's free and
+# keyless), but shows signs of a real, undocumented concurrent-request
+# ceiling under load. Bounding how many requests fire at once, process-
+# wide, keeps us under whatever that ceiling actually is.
 _SHODAN_CONCURRENCY = asyncio.Semaphore(3)
 
 _CPE_PART_NAMES = {"a": "Application", "o": "Operating System", "h": "Hardware"}

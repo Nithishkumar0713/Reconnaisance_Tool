@@ -6,8 +6,16 @@ const API_BASE = import.meta.env.DEV ? '/api' : ''
 export default function StartBatchScanModal({ scanId, subdomains, scanMode, onStart, onClose }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [maxConcurrent, setMaxConcurrent] = useState(10)
+  // Detailed is the default mode below, and it caps parallel scans at 5 —
+  // this needs to start in sync with that cap. It previously defaulted to
+  // 10 regardless of mode, so the slider showed 10 on first open and only
+  // corrected to 5 once the Detailed button was explicitly clicked.
+  const [maxConcurrent, setMaxConcurrent] = useState(5)
   const [batchMode, setBatchMode] = useState('detailed')
+  // Off by default — VirusTotal alone paces every call to a real 16s
+  // minimum spacing, process-wide, so for a large batch this is the single
+  // biggest lever over total run time. Explicit opt-in rather than always-on.
+  const [includeReputation, setIncludeReputation] = useState(false)
 
   const abuseipdbKey = localStorage.getItem('recon_abuseipdb_key') || ''
   const virustotalKey = localStorage.getItem('recon_virustotal_key') || ''
@@ -37,6 +45,7 @@ export default function StartBatchScanModal({ scanId, subdomains, scanMode, onSt
           subdomains: uniqueSubdomains,
           mode: batchMode,
           max_concurrent: maxConcurrent,
+          include_reputation: batchMode === 'detailed' ? includeReputation : false,
           abuseipdb_api_key: abuseipdbKey || undefined,
           virustotal_api_key: virustotalKey || undefined
         })
@@ -134,10 +143,27 @@ export default function StartBatchScanModal({ scanId, subdomains, scanMode, onSt
                 </div>
                 <p className="text-xs text-slate-600">
                   {batchMode === 'detailed'
-                    ? 'Runs the full module set on every subdomain: port scan, directory enum, reverse DNS, email harvesting, nested subdomain lookup, cloud provider ID, plus AbuseIPDB & VirusTotal reputation checks.'
+                    ? 'Runs the full module set on every subdomain: port scan, directory enum, reverse DNS, email harvesting, nested subdomain lookup, cloud provider ID, plus AbuseIPDB & VirusTotal reputation checks (if enabled below).'
                     : 'Passive checks only on every subdomain: DNS, WHOIS, SSL, headers, tech stack, geo/IP info. No port scanning, no reputation lookups.'}
                 </p>
               </div>
+
+              {batchMode === 'detailed' && (
+                <label className="flex items-start gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={includeReputation}
+                    onChange={(e) => setIncludeReputation(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 accent-teal-600 cursor-pointer"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-slate-700">Include reputation checks (AbuseIPDB &amp; VirusTotal)</span>
+                    <span className="block text-xs text-slate-600 mt-0.5">
+                      VirusTotal paces every request to a 16-second minimum gap, shared across the whole batch — for a large subdomain list this is usually the single biggest factor in total run time. Leave unchecked for a much faster sweep; tick it only if you specifically need reputation data.
+                    </span>
+                  </span>
+                </label>
+              )}
 
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-slate-700">
@@ -155,22 +181,6 @@ export default function StartBatchScanModal({ scanId, subdomains, scanMode, onSt
                   {batchMode === 'detailed'
                     ? 'Detailed mode caps at 5 parallel scans — each one spawns port scans and subprocess-based subdomain tools. Recommended: 3-5'
                     : 'Higher values = faster but may use more resources. Recommended: 3-5'}
-                </p>
-              </div>
-
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                <p className="text-xs text-amber-800 leading-relaxed">
-                  ⏱️ <strong>Estimated Time:</strong> ~{batchMode === 'detailed'
-                    ? Math.ceil(uniqueSubdomains.length / maxConcurrent * 3)
-                    : Math.ceil(uniqueSubdomains.length / maxConcurrent * 2)} minutes
-                  {batchMode === 'detailed' && (
-                    <>
-                      <br />
-                      🛡️ <strong>Port scanning:</strong> top 100 ports per subdomain — most real targets have an active firewall/IDS, which can still push this to ~2 min per subdomain
-                    </>
-                  )}
-                  <br />
-                  🔄 <strong>Rate Limiting:</strong> 16-second gaps between VirusTotal checks
                 </p>
               </div>
 

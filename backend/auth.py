@@ -16,7 +16,21 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User
 
-SECRET_KEY = os.getenv("SECRET_KEY", "recon-tool-secret-key-change-in-production-2024")
+_INSECURE_DEFAULT_SECRET = "recon-tool-secret-key-change-in-production-2024"
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY or SECRET_KEY == _INSECURE_DEFAULT_SECRET:
+    # Every JWT this app issues (and validates) is signed with this value —
+    # anyone who knows it can forge a valid token for any user and log in
+    # as them. This used to silently fall back to a hardcoded value that's
+    # sitting right here in the source; a deployment that forgot to set
+    # SECRET_KEY would run "successfully" while being fully compromisable.
+    # Fail loudly at startup instead — a missing/default secret should
+    # never be something you find out about after the fact.
+    raise RuntimeError(
+        "SECRET_KEY environment variable is not set (or is still the insecure "
+        "default). Set a real, random SECRET_KEY in backend/.env before starting "
+        "the app — e.g. `python -c \"import secrets; print(secrets.token_hex(32))\"`."
+    )
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
 

@@ -108,16 +108,32 @@ export default function BatchScanProgress({ batchId, onComplete, onBack, onBackg
     cancelled: 'bg-amber-500'
   }
 
+  const titleByStatus = {
+    completed: 'Batch Subdomain Scan Completed',
+    failed: 'Batch Subdomain Scan Failed',
+    cancelled: 'Batch Subdomain Scan Cancelled',
+  }
+  const subtitleByStatus = {
+    completed: `Scanned ${progress.total} unique subdomains`,
+    failed: `Scan stopped early — ${progress.completed} of ${progress.total} subdomains were scanned before it failed`,
+    cancelled: `Stopped by user — ${progress.completed} of ${progress.total} subdomains were scanned before cancelling`,
+  }
+  const headerTitle = titleByStatus[progress.status] || 'Batch Subdomain Scan in Progress'
+  const headerSubtitle = subtitleByStatus[progress.status] || `Scanning ${progress.total} unique subdomains with rate limiting`
+  const HeaderIcon = progress.status === 'completed' ? CheckCircle2 : progress.status === 'failed' || progress.status === 'cancelled' ? XCircle : Activity
+  const headerIconColor = progress.status === 'completed' ? 'text-green-600' : progress.status === 'failed' || progress.status === 'cancelled' ? 'text-amber-600' : 'text-teal-600'
+  const headerIconSpin = progress.status === 'running' || progress.status === 'pending' ? 'animate-spin' : ''
+
   return (
     <div className="natural-card p-6 space-y-5 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Activity className="w-6 h-6 text-teal-600" />
-            Batch Subdomain Scan in Progress
+            <HeaderIcon className={`w-6 h-6 ${headerIconColor} ${headerIconSpin}`} />
+            {headerTitle}
           </h2>
           <p className="text-sm text-slate-600 mt-1">
-            Scanning {progress.total} unique subdomains with rate limiting
+            {headerSubtitle}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -135,16 +151,6 @@ export default function BatchScanProgress({ batchId, onComplete, onBack, onBackg
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               Background
-            </button>
-          )}
-          {onBack && (
-            <button
-              onClick={onBack}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors"
-              title="Go back to main dashboard"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              Exit
             </button>
           )}
           {progress.status === 'running' || progress.status === 'pending' ? (

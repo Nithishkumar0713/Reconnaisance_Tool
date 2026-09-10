@@ -128,11 +128,28 @@ export function parseTargetList(raw, maxTargets = MAX_BATCH_TARGETS) {
 }
 
 export function countRawExpandedTargets(raw, maxTargets = MAX_BATCH_TARGETS) {
+  // Deliberately uncapped (Infinity, not maxTargets): expandIpRange() throws
+  // once a range's expanded size exceeds the cap it's given, which is the
+  // right behavior for parseTargetList() (building the real submit list —
+  // it should reject an oversized range outright). But this function feeds
+  // the *live* target counter shown while typing — if it used the same cap
+  // and let that exception propagate uncaught, a range like "x.x.x.1-11"
+  // (11 > the 10 max) would silently reset the live count to 0 instead of
+  // showing the true 11, which is exactly backwards: the one case where an
+  // accurate live count matters most (so the "too many" message can show)
+  // was the one case that broke it. Genuinely invalid ranges (backwards,
+  // bad octets) still throw here same as always — only the size cap is
+  // skipped for counting purposes.
   let total = 0
   for (const piece of raw.split(',')) {
     const t = piece.trim()
     if (!t) continue
-    const expanded = expandIpRange(t, maxTargets)
+    let expanded
+    try {
+      expanded = expandIpRange(t, Infinity)
+    } catch {
+      expanded = null
+    }
     total += expanded !== null ? expanded.length : 1
   }
   return total

@@ -142,15 +142,16 @@ const MODULE_DETAILS = {
   web_technologies: {
     icon: Layers,
     title: 'Web Technologies & Frameworks',
-    desc: 'Examine HTML source code, scripts, and headers to identify the underlying operating systems, programming languages, web framework stacks, content delivery networks, and third-party widgets.',
+    desc: 'Examine HTTP responses, page scripts, and a live-rendered browser pass to identify the underlying operating systems, programming languages, web framework stacks, content delivery networks, and third-party widgets — including exact version numbers where the technology exposes one.',
     details: [
       'Web Server & Reverse Proxy: Detecting edge servers (e.g. Nginx, Cloudflare)',
       'Programming Languages & Frameworks: Identifying backend engines (e.g. PHP, ASP.NET) and frontend frameworks (e.g. React, Vue)',
       'CMS (Content Management System): Recognizing content platforms (e.g. WordPress, Joomla)',
       'CDN (Content Delivery Network): Pinpointing edge caching systems routing web assets',
-      'Analytics & Utilities: Identifying tracking tools, font libraries, and scripts'
+      'Analytics & Utilities: Identifying tracking tools, font libraries, and scripts',
+      'Version Fingerprinting: Extracting exact version numbers (e.g. jQuery 3.6.0, Next.js 14.2) from HTTP headers and live JavaScript runtime properties'
     ],
-    howItChecked: 'This check pulls the home page source code and headers using the `aiohttp` client library. It then runs regex checks against a custom signature database containing Wappalyzer-inspired rule definitions to detect frameworks, libraries, CDNs, and analytics trackers.',
+    howItChecked: 'This check pulls the home page over HTTP using the `aiohttp` client library, then runs pattern matching against a large Wappalyzer-style signature catalog covering headers, cookies, meta tags, script sources, and page content to detect frameworks, libraries, CDNs, and analytics trackers. A real headless browser also renders the page once to read live JavaScript runtime properties (e.g. `React.version`, `jQuery.fn.jquery`) — many modern frameworks only expose an exact version number this way, since it never appears in raw HTTP responses.',
     color: 'text-amber-600 bg-amber-50 border-amber-100',
     btnStyle: 'bg-amber-600 hover:bg-amber-700 focus:ring-amber-500 glow-amber shadow-amber-200/50'
   },

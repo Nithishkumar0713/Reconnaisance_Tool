@@ -98,10 +98,12 @@ class BatchScanner:
         max_retries: int = 3,
         abuseipdb_api_key: str | None = None,
         virustotal_api_key: str | None = None,
+        include_reputation: bool = True,
     ):
         self.batch_scan_id = batch_scan_id
         self.subdomains = list(set(subdomains))
         self.mode = mode
+        self.include_reputation = include_reputation
 
         if max_concurrent is None:
             num_subs = len(self.subdomains)
@@ -203,7 +205,7 @@ class BatchScanner:
                     run_scan(
                         target=subdomain,
                         mode=self.mode,
-                        include_reputation=True,
+                        include_reputation=self.include_reputation,
                         module=None,
                         # Left as None, port_range would default to mode
                         # ("detailed" -> port_scanner's 1-1024 range, ~526
@@ -393,7 +395,8 @@ async def start_batch_scan(
     mode: str = "detailed",
     max_concurrent: int | None = None,
     abuseipdb_api_key: str | None = None,
-    virustotal_api_key: str | None = None
+    virustotal_api_key: str | None = None,
+    include_reputation: bool = True
 ) -> Dict[str, Any]:
     """
     Start a batch scan for multiple subdomains.
@@ -408,6 +411,13 @@ async def start_batch_scan(
                        - Fast: 50-150 concurrent (lighter scans)
         abuseipdb_api_key: Optional AbuseIPDB API key for reputation checks
         virustotal_api_key: Optional VirusTotal API key for reputation checks
+        include_reputation: Whether to run AbuseIPDB/VirusTotal checks per
+            subdomain. Only meaningful in detailed mode (fast mode never runs
+            reputation checks regardless — see should_include_reputation_checks).
+            VirusTotal alone paces every call to a real 16s minimum spacing,
+            so for a large batch this is the single biggest lever a user has
+            over total run time — surfaced as an explicit opt-in checkbox in
+            the batch-start modal rather than being silently always-on.
 
     Returns:
         Summary dict with batch_id, completed count, failed count, and detailed results
@@ -424,18 +434,13 @@ async def start_batch_scan(
         # reverse_dns, cloud_provider, AbuseIPDB, VirusTotal) instead of being
         # silently downgraded to the passive-only set. This outer per-subdomain
         # timeout wraps run_scan()'s whole asyncio.gather() of concurrent
-        # modules, so it must exceed the SLOWEST module's own internal ceiling
-        # or it just recreates the outer/inner timeout race that extra_timeout
-        # fixed for port_scan specifically (main.py) — one layer up. Verified
-        # directly: a real direct (non-batch) Detailed scan of both
-        # www.testfire.net and github.com each took ~300s, landing almost
-        # exactly on port_scan's own "port_scan_detailed" 300s ceiling (+20s
-        # extra_timeout = 320s outer) — NOT target-specific slowness, both
-        # showed "aggressive firewall detected, most ports blocked", which
-        # triggers port_scan's slow evasion-technique path on essentially any
-        # real firewalled target. subdomain_finder's own ceiling (360s,
-        # TIMEOUTS["subdomains"]) is the true max among concurrent modules, so
-        # 400s gives real margin above the slowest module instead of racing it.
+        # modules, so it must exceed the slowest module's own internal ceiling
+        # or it recreates the same outer/inner timeout race that extra_timeout
+        # fixes for port_scan specifically (main.py), one layer up. port_scan's
+        # own "port_scan_detailed" ceiling is 300s (+20s extra_timeout = 320s
+        # outer) against any firewalled target, and subdomain_finder's ceiling
+        # (TIMEOUTS["subdomains"]) is 360s — the true max among concurrent
+        # modules — so 400s gives real margin instead of racing it.
         # (240s was copied from full_scan_batch.py's PER_TARGET_TIMEOUT_SECONDS
         # without checking it against port_scan_detailed/subdomains' real
         # ceilings — that file likely has the same latent issue, flagged to
@@ -449,7 +454,8 @@ async def start_batch_scan(
             per_scan_timeout=per_scan_timeout,
             max_retries=2,
             abuseipdb_api_key=abuseipdb_api_key,
-            virustotal_api_key=virustotal_api_key
+            virustotal_api_key=virustotal_api_key,
+            include_reputation=include_reputation
         )
         logger.info(f"[BATCH-{batch_scan_id}] BatchScanner created, calling run_batch()...")
         result = await scanner.run_batch()

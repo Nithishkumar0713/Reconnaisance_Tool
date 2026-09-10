@@ -489,16 +489,13 @@ async def scan(ip: str, mode: str = "top100", target: str | None = None, timing_
     # the literal port-range strings were recognized), so a Deep-mode scan
     # — which never passes an explicit port_range, since neither run_scan()
     # nor FullScanBatchRequest have one — silently fell through to the
-    # `else` catch-all. That branch hardcodes overall_timeout=90 directly,
+    # `else` catch-all. That branch hardcoded overall_timeout=90 directly,
     # bypassing the TIMEOUTS.get("port_scan_fast", ...) lookup the
-    # equivalent named branch uses (120s). Verified directly against real
-    # batch data: every "partial" port_scan result observed was scanning
-    # exactly the top-100 port list and landing at 83-93/98 ports done —
-    # consistently *close* to finishing, cut off by that accidental 90s
-    # ceiling rather than 120s. Treated as a synonym for "fast" here
-    # (same port range Deep-mode scans have always actually run), not
-    # promoted to the 1-1024 "detailed" range — that would be a real scope
-    # change (much slower) this fix isn't trying to make.
+    # equivalent named branch uses (120s), cutting scans short before they
+    # could finish. Treated as a synonym for "fast" here (same port range
+    # Deep-mode scans have always actually run), not promoted to the
+    # 1-1024 "detailed" range — that would be a real scope change (much
+    # slower) this fix isn't trying to make.
     if mode_normalized in ("top100", "fast", "deep"):
         ports = TOP_100_PORTS
         overall_timeout = TIMEOUTS.get("port_scan_fast", 120)
@@ -587,10 +584,7 @@ async def scan(ip: str, mode: str = "top100", target: str | None = None, timing_
 
         # run_bounded (not a raw gather+wait_for) so that if this chunk's
         # timeout fires, whatever ports already finished are kept instead
-        # of the whole chunk's results being discarded — verified directly
-        # (a 10-target Deep batch) that several targets' port scans were
-        # returning open_port_count=0 on timeout despite most ports having
-        # already been probed successfully before the deadline hit.
+        # of the whole chunk's results being discarded on timeout.
         chunk_results, chunk_timed_out = await run_bounded(chunk, bounded_probe, concurrency, overall_timeout)
         results.extend(chunk_results)
 

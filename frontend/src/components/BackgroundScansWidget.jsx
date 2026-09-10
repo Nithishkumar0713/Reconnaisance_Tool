@@ -11,6 +11,27 @@ export default function BackgroundScansWidget({ onScanClick }) {
   }
 
   const isExpanded = expandedScanId !== null
+  const status = progress[expandedScanId]?.status
+  const isCompleted = status === 'completed'
+  const isStopped = status === 'cancelled' || status === 'failed'
+  const headerColorClass = isCompleted
+    ? 'bg-gradient-to-r from-green-500 to-green-600'
+    : isStopped
+      ? 'bg-gradient-to-r from-amber-500 to-amber-600'
+      : 'bg-gradient-to-r from-teal-500 to-teal-600'
+  const statusLabel = isCompleted
+    ? 'Completed!'
+    : status === 'cancelled'
+      ? 'Cancelled'
+      : status === 'failed'
+        ? 'Failed'
+        : 'Running in background'
+  const buttonLabel = isCompleted ? 'View Results' : isStopped ? 'View Details' : 'View Full Progress'
+  const buttonColorClass = isCompleted
+    ? 'bg-green-500 hover:bg-green-600'
+    : isStopped
+      ? 'bg-amber-500 hover:bg-amber-600'
+      : 'bg-teal-500 hover:bg-teal-600'
 
   return (
     <div className="fixed bottom-6 right-6 z-40">
@@ -27,22 +48,18 @@ export default function BackgroundScansWidget({ onScanClick }) {
 
       {isExpanded && expandedScanId && (
         <div className="bg-white rounded-lg shadow-2xl border border-slate-200 w-80 max-h-96 flex flex-col overflow-hidden">
-          <div className={`text-white p-4 flex items-center justify-between ${
-            progress[expandedScanId]?.status === 'completed'
-              ? 'bg-gradient-to-r from-green-500 to-green-600'
-              : 'bg-gradient-to-r from-teal-500 to-teal-600'
-          }`}>
+          <div className={`text-white p-4 flex items-center justify-between ${headerColorClass}`}>
             <div className="flex items-center gap-2">
-              {progress[expandedScanId]?.status === 'completed' ? (
+              {isCompleted ? (
                 <span className="w-5 h-5 text-green-100">✓</span>
+              ) : isStopped ? (
+                <X className="w-5 h-5" />
               ) : (
                 <Activity className="w-5 h-5 animate-spin" />
               )}
               <div>
                 <h3 className="font-semibold text-sm">Batch Scan Progress</h3>
-                <p className="text-xs opacity-75">
-                  {progress[expandedScanId]?.status === 'completed' ? 'Completed!' : 'Running in background'}
-                </p>
+                <p className="text-xs opacity-75">{statusLabel}</p>
               </div>
             </div>
             <button
@@ -95,13 +112,9 @@ export default function BackgroundScansWidget({ onScanClick }) {
           <div className="bg-slate-50 border-t border-slate-200 p-3 flex gap-2">
             <button
               onClick={() => onScanClick(expandedScanId)}
-              className={`flex-1 px-3 py-2 text-white rounded text-xs font-bold transition-colors ${
-                progress[expandedScanId]?.status === 'completed'
-                  ? 'bg-green-500 hover:bg-green-600'
-                  : 'bg-teal-500 hover:bg-teal-600'
-              }`}
+              className={`flex-1 px-3 py-2 text-white rounded text-xs font-bold transition-colors ${buttonColorClass}`}
             >
-              {progress[expandedScanId]?.status === 'completed' ? 'View Results' : 'View Full Progress'}
+              {buttonLabel}
             </button>
             <button
               onClick={() => toggleExpandScan(expandedScanId)}

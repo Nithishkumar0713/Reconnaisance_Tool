@@ -64,8 +64,14 @@ export default function App() {
 
   // Any scan currently in flight — single-target, single-module, subdomain
   // batch, or full-scan batch — used to drive the header status pill and
-  // to keep the idle-logout timer from firing mid-scan.
-  const isAnyScanActive = status === 'scanning' || batchStatus === 'progress' || fullBatchStatus === 'progress' || anyModuleScanning
+  // to keep the idle-logout timer from firing mid-scan. Includes batches
+  // sent to the background: backgroundScans only holds entries for scans
+  // that haven't reached a terminal state yet (BackgroundScansContext
+  // removes completed/cancelled/failed ones automatically), so a batch
+  // still running there is exactly as "active" as one shown in the
+  // foreground — the header shouldn't read IDLE just because the user
+  // clicked Background.
+  const isAnyScanActive = status === 'scanning' || batchStatus === 'progress' || fullBatchStatus === 'progress' || anyModuleScanning || Object.keys(backgroundScans).length > 0
 
   const [showAccountModal, setShowAccountModal] = useState(false)
   const [showHistoryModal, setShowHistoryModal] = useState(false)
@@ -100,6 +106,17 @@ export default function App() {
       const res = await fetch(`${API_BASE}/history/scans`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
+      if (res.status === 401) {
+        // Same stale/invalidated-token handling as the other fetch call
+        // sites in this file — this one runs automatically on every page
+        // load (see the effect below), so a stale token here previously
+        // just failed silently in the console instead of prompting login.
+        localStorage.removeItem('recon_token')
+        localStorage.removeItem('recon_user')
+        setUser(null)
+        setPage('auth')
+        return
+      }
       if (res.ok) {
         const data = await res.json()
         if (Array.isArray(data)) {
@@ -384,6 +401,10 @@ export default function App() {
     setFullBatchId(null)
     setFullBatchStatus('idle')
     setViewingFullBatchTarget(null)
+    // Otherwise a stale id from a previously-viewed history scan could leak
+    // into a fresh scan started right after (onBatchScan's fallback prefers
+    // an already-set currentScanId over the new scan's own scan_id).
+    setCurrentScanId(null)
   }
 
   const [sessionExpiredReason, setSessionExpiredReason] = useState('')
@@ -534,7 +555,7 @@ export default function App() {
       className="min-h-screen bg-gradient-to-tr from-[#bae6fd] via-[#e0f2fe] to-[#ccfbf1] text-natural-text flex flex-col justify-between selection:bg-teal-200 selection:text-teal-950"
     >
       <header className="border-b border-orange-400 bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 sticky top-0 z-50 shadow-md">
-        <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-10 py-5 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-full bg-orange-700/40 border border-orange-400/50 flex items-center justify-center text-white shadow-inner cursor-pointer" onClick={() => { reset(); setSelectedModule(null); }}>
               <ReconLogo className="w-7 h-7" style={{ color: 'white' }} />
@@ -562,7 +583,7 @@ export default function App() {
                 ? 'checking host'
                 : anyModuleScanning
                 ? 'module check running'
-                : batchStatus === 'progress' || fullBatchStatus === 'progress'
+                : batchStatus === 'progress' || fullBatchStatus === 'progress' || Object.keys(backgroundScans).length > 0
                 ? 'batch scan running'
                 : 'idle'}
             </div>
@@ -723,7 +744,14 @@ export default function App() {
                   onReset={reset}
                   onReScan={handleReScan}
                   onBatchScan={() => {
-                    setCurrentScanId(scanData.scan_id || scanData.id)
+                    // Don't clobber an already-correct currentScanId (set by
+                    // onViewScan when this scan was opened from History) —
+                    // scanData.scan_id/.id are only ever present for a scan
+                    // that JUST completed in this session (scan_id is added
+                    // to the in-memory result after it's already been
+                    // persisted, so a historical result never has it). Only
+                    // fall back to them when currentScanId isn't already set.
+                    setCurrentScanId(prev => prev ?? (scanData.scan_id || scanData.id))
                     setShowBatchModal(true)
                   }}
                 />

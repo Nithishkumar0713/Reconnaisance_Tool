@@ -1034,6 +1034,7 @@ export function buildScanReportBody(data) {
                 ${getStatusLabel(r.web_technologies)}
             </div>
             ${isOk(r.web_technologies) && tech.technologies ? `
+            ${tech.weak_tls_downgrade ? `<p class="fallback-text" style="color: #92400e;">${tech.weak_tls_note || ''}</p>` : ''}
             <table class="kv-table" style="margin-bottom: 15px;">
                 <tr><th style="width: 30%;">Server Header</th><td class="mono">${tech.meta?.server || '—'}</td></tr>
                 <tr><th>Powered By</th><td class="mono">${tech.meta?.powered_by || '—'}</td></tr>
@@ -1625,6 +1626,7 @@ export function buildScanReportBodyTwoPane(data) {
                         ${getStatusLabel(r.web_technologies)}
                     </div>
                     ${isOk(r.web_technologies) && tech.technologies ? `
+                    ${tech.weak_tls_downgrade ? `<p class="fallback-text" style="color: #92400e;">${tech.weak_tls_note || ''}</p>` : ''}
                     <table class="kv-table" style="margin-bottom: 15px;">
                         <tr><th style="width: 30%;">Server Header</th><td class="mono">${tech.meta?.server || '—'}</td></tr>
                         <tr><th>Powered By</th><td class="mono">${tech.meta?.powered_by || '—'}</td></tr>

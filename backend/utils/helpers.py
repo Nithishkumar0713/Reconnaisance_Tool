@@ -246,15 +246,10 @@ def get_relaxed_ssl_context():
     level (SECLEVEL) so the handshake itself doesn't get refused on legacy
     servers — e.g. a 1024-bit DH key, which modern OpenSSL (SECLEVEL 1+)
     rejects outright with DH_KEY_TOO_SMALL before any certificate is even
-    considered. Verified directly against a real target (pramani.cdac.in):
-    Python's default ssl context refuses the handshake, while curl on this
-    machine (Windows Schannel backend, not OpenSSL) connects fine — proving
-    the site is genuinely reachable, just not to a strict-by-default OpenSSL
-    client. `openssl s_client -cipher "ALL:@SECLEVEL=0"` reproduces that same
-    tolerant behavior manually and confirms the 1024-bit DH key as the cause.
-    Intended only as an explicit, narrowly-scoped fallback after a strict
-    attempt fails for this reason — never the first attempt — so the
-    resulting security gap gets reported, not silently hidden.
+    considered, even though the site may be genuinely reachable to a more
+    tolerant client. Intended only as an explicit, narrowly-scoped fallback
+    after a strict attempt fails for this reason — never the first attempt
+    — so the resulting security gap gets reported, not silently hidden.
     """
     import ssl
     ctx = ssl.create_default_context()

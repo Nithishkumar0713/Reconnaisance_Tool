@@ -237,12 +237,11 @@ async def _whois_sync_gated(domain: str) -> dict[str, Any] | None:
     """_whois_sync, but only submitted to the executor once a priority DNS
     concurrency slot is free — python-whois resolves the right WHOIS
     server's hostname internally, a real DNS query competing for the same
-    limited resolver capacity as every other module. Verified directly:
-    this is exactly where "WHOIS server did not respond: [Errno 11001]
-    getaddrinfo failed" was observed, repeatedly, for definitely-registered
-    domains under heavy concurrent batch load. Uses the small priority
-    pool, not the large bulk pool, since this is a one-shot-per-target
-    call whose failure directly fails the whole module."""
+    limited resolver capacity as every other module. This is where
+    "WHOIS server did not respond: [Errno 11001] getaddrinfo failed" shows
+    up under heavy concurrent batch load. Uses the small priority pool,
+    not the large bulk pool, since this is a one-shot-per-target call
+    whose failure directly fails the whole module."""
     loop = asyncio.get_event_loop()
     async with PRIORITY_DNS_SEMAPHORE:
         return await loop.run_in_executor(None, _whois_sync, domain)

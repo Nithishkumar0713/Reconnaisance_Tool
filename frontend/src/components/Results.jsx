@@ -2690,6 +2690,11 @@ export function TechSection({ data }) {
 
   return (
     <div className="space-y-5">
+      {data.weak_tls_downgrade && (
+        <div className="mono text-xs text-amber-800 font-semibold bg-amber-50/40 border border-amber-100 rounded-lg px-3 py-2">
+          {data.weak_tls_note}
+        </div>
+      )}
       {Object.entries(grouped).map(([categoryLabel, items]) => (
         <div key={categoryLabel} className="border border-slate-200 bg-white rounded-2xl p-4.5 shadow-sm">
           <div className="mono text-xs text-amber-900 uppercase tracking-widest font-extrabold mb-3.5 flex items-center gap-2 pb-2.5 border-b border-slate-150">

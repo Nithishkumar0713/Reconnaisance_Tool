@@ -15,30 +15,33 @@ TIMEOUTS = {
     "ssl": 45,
     "geo_ip": 30,
     "http_headers": 45,
-    "web_tech": 45,
+    # Bumped 45->90: web_tech's aiohttp phase (<=30s) is now followed by a
+    # headless-browser pass reading JS-runtime version signals
+    # (_JS_DETECTION_TIMEOUT=25s, raised from 15s after a real 5-concurrent-
+    # deep-scan burst measured real page loads taking longer than that under
+    # genuine DNS/CPU contention from the scan's own other modules) plus a
+    # second catalog-match pass (_CATALOG_MATCH_HARD_TIMEOUT=12s) — see
+    # modules/web_tech.py. 90s comfortably covers that worst-case sequential
+    # total with margin, and is still far under the modules that actually
+    # dominate a deep/detailed scan's wall time (subdomains,
+    # port_scan_detailed, virustotal below).
+    "web_tech": 90,
     "subdomains": 360,
     # Bumped 30->45 alongside shodan below: both are a single external
     # HTTP call with their own internal concurrency cap (Semaphore(5) here,
     # Semaphore(3) for shodan) rather than VirusTotal's strict proactive
-    # pacing, so they were never queue-starved the way VT was — but
-    # verified directly (a 10-target Deep batch, concurrency 5) both still
-    # produced genuine timeouts under real concurrent load, surviving even
-    # a retry. 45s matches the budget already given to comparable
+    # pacing, so they were never queue-starved the way VT was, but still
+    # produced genuine timeouts under real concurrent load even with a
+    # retry. 45s matches the budget already given to comparable
     # single-external-call modules (ssl, http_headers, web_tech,
     # cloud_provider) rather than singling these two out as tighter.
     "abuseipdb": 45,
     # reputation.py proactively paces VirusTotal calls to a real 16s minimum
     # spacing, process-wide (see _vt_wait_for_slot) — under concurrent load
-    # (e.g. several full-scan-batch targets all wanting a VT check at once)
     # a call can spend real time simply queued for its turn before the
     # actual request even starts, and that wait counts against this same
-    # timeout. Verified directly: a 3-target concurrent Deep batch produced
-    # a genuine "VirusTotal did not respond within 30s" on the 3rd target,
-    # whose queue wait alone (~32s, third-in-line at 16s/step) already
-    # exceeded the old 30s budget before any HTTP request was even sent.
-    # 120s comfortably covers the worst realistic case for this app's
-    # concurrency ceilings (up to 5 concurrent Deep-batch targets: ~64s
-    # queue + a slow request + the existing 16s reactive 429-retry sleep).
+    # timeout. 120s comfortably covers the worst realistic case for this
+    # app's concurrency ceilings.
     "virustotal": 120,
     "shodan": 45,
     "email_harvester": 30,

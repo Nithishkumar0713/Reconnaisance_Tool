@@ -10,9 +10,11 @@ Then validates each found subdomain by checking if it resolves to an IP address.
 """
 
 import asyncio
+import functools
 import socket
 import shutil
 import ssl
+import time
 import warnings
 from typing import Any
 from concurrent.futures import ThreadPoolExecutor
@@ -124,31 +126,20 @@ _FAST_RESOLVERS = ["8.8.8.8", "1.1.1.1", "9.9.9.9", "8.8.4.4"]
 
 # Some real-world domains (large SaaS companies especially) have thousands
 # of subdomains discoverable via crt.sh/wayback/etc. with no IP attached,
-# and each one needs its own real DNS lookup to resolve. Verified directly
-# (a 10-target Deep batch at concurrency 5) that one such target
-# (bitbucket.org, ~9,700 unresolved subdomains) can keep all 60 of its
-# resolution-stage worker threads busy for the *entire* 60s stage timeout,
-# holding that many shared DNS-executor slots continuously rather than
-# releasing them quickly — which starved every other concurrent target's
-# DNS-dependent modules (geo_ip, whois, shodan_intel, etc.) in the same
-# batch wave and caused widespread collateral timeouts. Capping how many
+# and each one needs its own real DNS lookup to resolve. A target with
+# enough unresolved subdomains can keep every resolution-stage worker
+# thread busy for the entire stage timeout, starving other concurrent
+# targets' DNS-dependent modules in the same batch wave. Capping how many
 # get resolved bounds that worst case; only applied for is_single_module
 # =False (full scans, solo or batched) so the dedicated single-module
 # Subdomain Finder check keeps its existing unlimited behavior.
 #
-# Lowered from 1000 to 400 after further testing showed the real ceiling
-# here isn't in-process thread-pool slot count (600 workers is far more
-# than 5 concurrent targets' peak *simultaneous* demand) — it's genuine
-# real-world DNS query *volume* leaving this one machine. Domains with a
-# large raw discovery count (heroku.com: 35,334; salesforce.com: 55,663 in
-# one run) still generate substantial real lookup traffic even with a
-# 1000-item cap, and that traffic shares the same underlying network/
-# resolver capacity as every other module's real DNS calls (resolve_target,
-# whois, dns_recon) — verified directly: domains that failed with
-# DNS-resolution errors mid-batch resolved instantly when tested seconds
-# later in isolation, meaning it's contention, not a real outage. No
-# thread-pool size fixes a real external throughput ceiling; cutting the
-# self-inflicted query volume does.
+# The real ceiling here isn't in-process thread-pool slot count, it's
+# genuine DNS query volume leaving this one machine — that traffic shares
+# the same underlying network/resolver capacity as every other module's
+# real DNS calls (resolve_target, whois, dns_recon). No thread-pool size
+# fixes a real external throughput ceiling; cutting the self-inflicted
+# query volume does.
 _MAX_UNRESOLVED_TO_RESOLVE = 400
 
 
@@ -217,10 +208,9 @@ async def _detect_wildcard_dns(base_domain: str) -> set[str]:
     Probes 3 guaranteed-nonexistent random subdomains. If they all resolve
     to the same IP(s), the domain has wildcard DNS (every possible subdomain
     resolves, real or not) and returns that IP set; otherwise returns an
-    empty set. Verified directly: bitbucket.org resolves random-uuid
-    subdomains just like real ones, which is exactly what made bruteforcing
-    it pointless (every one of ~10k wordlist guesses "succeeds") — see
-    _bruteforce_subdomains for how this is used.
+    empty set. Domains with wildcard DNS make bruteforcing pointless (every
+    wordlist guess "succeeds") — see _bruteforce_subdomains for how this
+    is used.
     """
     import uuid
     probes = [f"{uuid.uuid4().hex}-wc-probe.{base_domain}" for _ in range(3)]
@@ -299,15 +289,64 @@ async def _http_get_with_retry(
     return {"status": "failed", "data": None}
 
 
+# Every source below is a free, unauthenticated, community-run or
+# shared-quota service — measured directly this session: crt.sh's response
+# time on the exact same domain swings from ~3s to ~40s run to run and
+# outright fails a real fraction of the time (4 consecutive live attempts
+# against cdac.in: fail, 12.8s, 39.9s, 2.8s); HackerTarget hit its daily
+# quota mid-session from this project's own repeated testing of the same
+# few domains (cdac.in, licindia.in, paruluniversity.ac.in). None of that
+# is fixable with more timeout/retry tuning — it's real third-party
+# rate-limiting and flakiness. What a domain's subdomains actually *are*
+# also doesn't meaningfully change minute-to-minute, so caching each
+# source's last *successful* result per domain and reusing it for a while
+# is strictly better than re-rolling the dice (and re-spending shared
+# quota) on every re-scan of the same domain — failures are never cached,
+# so a bad run never poisons the next one, and a source that's currently
+# rate-limited gets to recover instead of being hit again immediately.
+_source_cache: dict[tuple[str, str], tuple[float, dict]] = {}
+_SOURCE_CACHE_TTL_SECONDS = 3600.0
+
+
+def _cached_source(fn):
+    """Decorator for a `_fetch_*(domain, ...)` passive-source function —
+    see _source_cache above for why."""
+    @functools.wraps(fn)
+    async def wrapper(domain: str, *args, **kwargs):
+        key = (fn.__name__, domain)
+        cached = _source_cache.get(key)
+        if cached is not None:
+            cached_at, cached_result = cached
+            if time.monotonic() - cached_at < _SOURCE_CACHE_TTL_SECONDS:
+                result = dict(cached_result)
+                result["note"] = "cached result (<1h old)"
+                return result
+
+        result = await fn(domain, *args, **kwargs)
+        if result.get("status") == "ok":
+            _source_cache[key] = (time.monotonic(), result)
+        return result
+
+    return wrapper
+
+
+@_cached_source
 async def _fetch_crtsh(domain: str, is_single_module: bool = False) -> dict:
     urls = [
         f"https://crt.sh/?q=%25.{domain}&output=json",
         f"https://crt.sh/?q={domain}&output=json",
     ]
-    retries = 2 if is_single_module else 1
+    # The overall passive-sources stage already budgets 120s (detailed) /
+    # 90s (single-module) in find() below, so there's ample room to give
+    # crt.sh several real chances instead of the shortest timeout of any
+    # source (the old 5.0s/1-retry budget lost this, the single richest
+    # source here, on a real batch-mode cdac.in scan while every other
+    # source succeeded).
+    retries = 3
+    timeout_sec = 15.0 if is_single_module else 20.0
     data = None
     for u in urls:
-        res = await _http_get_with_retry(u, response_format="json", retries=retries, timeout_sec=10.0 if is_single_module else 5.0)
+        res = await _http_get_with_retry(u, response_format="json", retries=retries, timeout_sec=timeout_sec)
         if res["status"] == "ok" and res["data"]:
             data = res["data"]
             break
@@ -327,6 +366,7 @@ async def _fetch_crtsh(domain: str, is_single_module: bool = False) -> dict:
     return {"status": "ok", "results": results}
 
 
+@_cached_source
 async def _fetch_certspotter(domain: str, is_single_module: bool = False) -> dict:
     url = f"https://api.certspotter.com/v1/issuances?domain={domain}&include_subdomains=true&expand=dns_names"
     res = await _http_get_with_retry(url, response_format="json", retries=2 if is_single_module else 1, timeout_sec=10.0 if is_single_module else 5.0)
@@ -345,6 +385,7 @@ async def _fetch_certspotter(domain: str, is_single_module: bool = False) -> dic
     return {"status": "ok", "results": results}
 
 
+@_cached_source
 async def _fetch_hackertarget(domain: str) -> dict:
     url = f"https://api.hackertarget.com/hostsearch/?q={domain}"
     res = await _http_get_with_retry(url, response_format="text", retries=2, timeout_sec=8.0)
@@ -363,6 +404,7 @@ async def _fetch_hackertarget(domain: str) -> dict:
     return {"status": "ok", "results": results}
 
 
+@_cached_source
 async def _fetch_alienvault(domain: str) -> dict:
     url = f"https://otx.alienvault.com/api/v1/indicators/domain/{domain}/passive_dns"
     headers = {
@@ -382,6 +424,7 @@ async def _fetch_alienvault(domain: str) -> dict:
     return {"status": "ok", "results": results}
 
 
+@_cached_source
 async def _fetch_rapiddns(domain: str) -> dict:
     url = f"https://rapiddns.io/subdomain/{domain}?full=1&down=1"
     res = await _http_get_with_retry(url, response_format="text", retries=2, timeout_sec=8.0)
@@ -398,6 +441,7 @@ async def _fetch_rapiddns(domain: str) -> dict:
     return {"status": "ok", "results": results}
 
 
+@_cached_source
 async def _fetch_wayback(domain: str) -> dict:
     import urllib.parse
     url = f"http://web.archive.org/cdx/search/cdx?url=*.{domain}/*&output=json&fl=original&collapse=urlkey&limit=3000"
@@ -422,6 +466,7 @@ async def _fetch_wayback(domain: str) -> dict:
     return {"status": "ok", "results": results}
 
 
+@_cached_source
 async def _fetch_urlscan(domain: str) -> dict:
     url = f"https://urlscan.io/api/v1/search/?q=domain:{domain}&size=100"
     res = await _http_get_with_retry(url, response_format="json", retries=2, timeout_sec=8.0)
@@ -442,6 +487,7 @@ async def _fetch_urlscan(domain: str) -> dict:
     return {"status": "ok", "results": results}
 
 
+@_cached_source
 async def _fetch_anubis(domain: str) -> dict:
     url = f"https://jldc.me/anubis/subdomains/{domain}"
     res = await _http_get_with_retry(url, response_format="json", retries=2, timeout_sec=8.0)
@@ -461,6 +507,7 @@ async def _fetch_anubis(domain: str) -> dict:
     return {"status": "ok", "results": results}
 
 
+@_cached_source
 async def _fetch_subdomain_center(domain: str) -> dict:
     url = f"https://subdomain.center/api/stream?domain={domain}"
     res = await _http_get_with_retry(url, response_format="json", retries=2, timeout_sec=8.0)
@@ -480,6 +527,7 @@ async def _fetch_subdomain_center(domain: str) -> dict:
     return {"status": "ok", "results": results}
 
 
+@_cached_source
 async def _fetch_threatminer(domain: str) -> dict:
     url = f"https://api.threatminer.org/v2/domain.json?q={domain}&rt=5"
     res = await _http_get_with_retry(url, response_format="json", retries=2, timeout_sec=8.0)
@@ -500,6 +548,7 @@ async def _fetch_threatminer(domain: str) -> dict:
 
 
 
+@_cached_source
 async def _fetch_virustotal_public(domain: str) -> dict:
     """VirusTotal public UI endpoint — no API key required, returns up to 40 subdomains."""
     url = f"https://www.virustotal.com/ui/domains/{domain}/subdomains?limit=40"
@@ -549,6 +598,7 @@ async def _reverse_ip_lookup_shodan(ip: str, root_domain: str) -> list[str]:
     return found
 
 
+@_cached_source
 async def _fetch_search_engines(domain: str) -> dict:
     """Scrape DuckDuckGo and Yahoo using site: dork to find indexed subdomains."""
     import re
@@ -575,6 +625,7 @@ async def _fetch_search_engines(domain: str) -> dict:
     return {"status": "ok", "results": results}
 
 
+@_cached_source
 async def _fetch_robtex(domain: str) -> dict:
     url = f"https://freeapi.robtex.com/pdns_forward?domain={domain}"
     res = await _http_get_with_retry(url, response_format="text", retries=2, timeout_sec=8.0)
@@ -606,6 +657,7 @@ async def _fetch_robtex(domain: str) -> dict:
     return {"status": "ok", "results": results}
 
 
+@_cached_source
 async def _fetch_bevigil(domain: str) -> dict:
     import os
     key = os.getenv("BEVIGIL_API_KEY", "").strip()
@@ -627,6 +679,7 @@ async def _fetch_bevigil(domain: str) -> dict:
     return {"status": "ok", "results": results}
 
 
+@_cached_source
 async def _fetch_netlas(domain: str) -> dict:
     import os
     key = os.getenv("NETLAS_API_KEY", "").strip()
@@ -690,7 +743,7 @@ def _generate_permutations(discovered: list[str], root_domain: str) -> list[str]
 async def _recursive_subdomain_discovery(wave1_entries: list[dict], root_domain: str) -> list[dict]:
     """
     Wave 2: For every subdomain found in wave 1, try to find its children.
-    E.g. if wave1 found 'ebiz.licindia.in', we now look for '*.ebiz.licindia.in'.
+    E.g. if wave1 found 'ebiz.example.com', we now look for '*.ebiz.example.com'.
 
     Strategies:
       1. crt.sh wildcard query for each sub-parent
@@ -1108,8 +1161,23 @@ async def find(domain: str, is_single_module: bool = False, scan_mode: str = "de
         to_resolve = [e["subdomain"] for e in unresolved]
         if not is_single_module and len(to_resolve) > _MAX_UNRESOLVED_TO_RESOLVE:
             to_resolve = to_resolve[:_MAX_UNRESOLVED_TO_RESOLVE]
+        # A single-module Subdomain Finder check runs in complete isolation,
+        # so its resolve_one() calls get BULK_DNS_SEMAPHORE's slots (see
+        # utils/concurrency.py) essentially to themselves. As one module
+        # inside a full scan, this same stage competes for those same
+        # global, process-wide slots against every other DNS-issuing module
+        # running concurrently for the same target (dns_records, reverse_dns,
+        # port_scan, directory_enum, whois, ...) — confirmed directly:
+        # identical domain, single-module run resolved 72/77 discovered
+        # subdomains (93%) inside the old flat 60s budget, the same domain's
+        # full-scan run resolved only 7/37 (19%) in that same window. More
+        # concurrency doesn't fix contention for a shared, fixed-size pool —
+        # more time does, since slots free up as sibling modules finish.
+        # find()'s own sub_timeout (120s detailed) + this stage only used
+        # 180s of the 360s TIMEOUTS["subdomains"] ceiling, leaving real room.
+        resolve_timeout = 60.0 if is_single_module else 150.0
         try:
-            resolved_results, _ = await run_bounded(to_resolve, resolve_one, concurrency, 60.0)
+            resolved_results, _ = await run_bounded(to_resolve, resolve_one, concurrency, resolve_timeout)
             for sub, ips in resolved_results:
                 resolve_map[sub] = ips
         except Exception:

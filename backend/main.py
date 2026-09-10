@@ -126,21 +126,27 @@ app = FastAPI(
 async def _warm_up_caches():
     """
     web_tech.py lazily builds its ~7,200-technology, ~20,000-pattern regex
-    catalog on first use, cached at module level after that. Fine for a
-    single request — but verified directly: right after a fresh restart, a
-    batch scan whose first wave runs web_technologies for several targets
-    concurrently can have multiple threads race to build that same cold
-    cache at once, and that much simultaneous CPU-bound regex compilation
-    is enough GIL contention to make even a trivial /health request briefly
-    unresponsive (observed directly: one wave-1 request took 20+ seconds
-    where it's normally under 0.2s; no repeat for the rest of that batch,
-    or in any wave of a second batch run right after). Building the
-    catalog once here, at startup — before any request can trigger a
-    concurrent race for it — avoids that entirely.
+    catalog on first use, cached at module level after that. A cold cache
+    hit by several concurrent web_technologies calls at once (e.g. a
+    batch's first wave) can race to build it simultaneously, and that much
+    CPU-bound regex compilation at once briefly starves the event loop.
+    Building the catalog once here, at startup, avoids that race entirely.
     """
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, web_tech._load_catalog)
     print("[INIT] Web technology catalog pre-loaded")
+
+    browser = await web_tech._ensure_browser()
+    if browser is not None:
+        print("[INIT] Headless browser (web_tech JS detection) ready")
+    else:
+        print("[INIT] Headless browser unavailable — web_tech will skip JS-based version detection")
+
+
+@app.on_event("shutdown")
+async def _shutdown_browser():
+    await web_tech.close_browser()
+
 
 running_batch_tasks: dict[int, "asyncio.Task"] = {}
 running_full_scan_batch_tasks: dict[int, "asyncio.Task"] = {}
@@ -158,6 +164,24 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Authorization", "Content-Type"],
 )
+
+
+@app.middleware("http")
+async def _security_headers(request, call_next):
+    """Baseline security response headers — this app had none. Deliberately
+    NOT adding Content-Security-Policy or Strict-Transport-Security here:
+    CSP would need real tuning to not break /docs (Swagger UI's inline
+    scripts) and HSTS is actively harmful on an http-only dev deployment
+    (browsers start refusing plain HTTP entirely). These four are safe —
+    they don't change any response body or break any existing behavior."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
+    return response
+
+
 Base.metadata.create_all(bind=engine)
 
 app.include_router(auth_router)
@@ -379,46 +403,21 @@ async def _safe_module(coro: Coroutine, timeout_key: str, module_name: str, extr
     instead of crashing the whole scan.
 
     extra_timeout (default 0, so every existing call site is unaffected)
-    exists for the one case where a module's own *internal* timeout is set
-    to the exact same value as this outer one: port_scan.py was fixed to
-    gracefully return whatever real port data it had collected when its
-    own internal deadline hit, instead of discarding everything — but that
-    fix only works if the internal logic actually gets to run its
-    return-partial-results path before this outer wrapper gives up too.
-    With both set to an identical timeout, it's a race with no guaranteed
-    winner. Verified directly: a 10-target Deep batch at concurrency 5
-    produced 5 hard "Port scan did not respond within 120s" failures where
-    the scan had almost certainly already computed a real partial result
-    that this outer timeout was cancelling before it could be returned.
+    exists because port_scan.py's own internal timeout can match this
+    outer one exactly — a race with no guaranteed winner, where the outer
+    wrapper can cancel before port_scan's own graceful partial-results
+    path gets to run. Giving the outer wrapper a small buffer lets that
+    inner path win instead.
     """
     timeout = TIMEOUTS.get(timeout_key, 30) + extra_timeout
     return await with_timeout(coro, timeout, module_name)
 
 
 # Error codes worth retrying for the curated fast-module set in run_scan()'s
-# task dict — genuinely ambiguous, "couldn't get a clean signal" outcomes,
-# not confirmed facts. Started as TIMEOUT-only; widened after directly
-# observing (a 10-target concurrent Deep batch, before vs. after
-# comparison) that two of the three still-failing cases weren't outer
-# with_timeout() timeouts at all: geo_ip completed within its own budget
-# but had all 4 of its own internal providers fail at once
-# (API_UNREACHABLE), and ssl_certificate hit a one-off DNS resolution
-# failure (DNS_RESOLUTION_FAILED) — both are exactly as transient as an
-# outright timeout, just surfaced through a different code path.
-#
-# INVALID_RESPONSE added after a real case: abuseipdb.py's catch-all
-# "none of our attempts returned usable data" branch (not a specific
-# unauthorized/rate-limited/timeout signal — genuinely just "didn't work,
-# unclear why") produced this code for discord.com in a live batch, and
-# was NOT retried under the old set. Verified directly seconds later: the
-# exact same IP, queried fresh, returned a completely normal, valid
-# AbuseIPDB response — proving that specific failure was transient, not
-# AbuseIPDB genuinely rejecting the IP as invalid/private despite what its
-# message text says. Every current use of INVALID_RESPONSE across the
-# retried modules (reputation.py's AbuseIPDB/VirusTotal branches) is this
-# same kind of "couldn't parse/get a clean result" catch-all rather than a
-# deterministic fact, so it belongs in this set for the same reason as the
-# other three.
+# task dict — ambiguous, plausibly-transient outcomes, not confirmed facts.
+# INVALID_RESPONSE included because it's a generic "couldn't get a clean
+# result" catch-all (e.g. abuseipdb.py) rather than a deterministic
+# rejection.
 _MODULE_RETRY_WORTHY_ERROR_CODES = {
     ScanError.TIMEOUT,
     ScanError.API_UNREACHABLE,
@@ -437,54 +436,25 @@ async def _safe_module_with_retry(
     Like _safe_module, but retries — with a *fresh* call each time, not a
     resumed coroutine (a timed-out coroutine can't be safely re-awaited) —
     when the most recent attempt comes back with an ambiguous,
-    plausibly-transient result (see _MODULE_RETRY_WORTHY_ERROR_CODES), plus
-    one further targeted case: whois_lookup.py returns status "not_found"
-    both for a genuinely unregistered domain *and* for its own underlying
-    WHOIS query silently coming back empty (its "if not w or not
-    w.domain_name" branch) — these are indistinguishable from here, but
-    verified directly: github.com, wikipedia.org, and apache.org (all
-    obviously registered) each returned "not_found" once under concurrent
-    batch load, then succeeded normally on a bare retry — so for whois
-    specifically, "not_found" is treated as ambiguous too rather than
-    trusted as fact.
+    plausibly-transient result (see _MODULE_RETRY_WORTHY_ERROR_CODES).
+    Also treats whois_lookup.py's "not_found" status as retry-worthy,
+    since it's returned both for a genuinely unregistered domain and for
+    an empty underlying WHOIS response — indistinguishable from here.
 
-    `retry_delays` controls how many attempts follow the first, and how
-    long to wait before each: default is one retry after 2s (matches the
-    original design). Modules cheap enough that a couple of extra fresh
-    attempts cost little are given (2.0, 5.0) — two retries, backing off
-    further the second time — because a single 2s-later retry sometimes
-    still lands in the same contention window (observed directly: a
-    10-target concurrent Deep batch where geo_ip failed on both the first
-    attempt *and* the first retry for two targets, on a run that also
-    included a domain with pathological wildcard-DNS-driven resource
-    contention). A longer second gap gives real contention more room to
-    clear before trying again.
+    `retry_delays` controls how many attempts follow the first and how
+    long to wait before each. Cheap modules get two retries with growing
+    backoff; virustotal gets only one, since each attempt already costs
+    ~16s of proactive rate-limit pacing.
 
-    Deliberately a *new*, separate function from _safe_module rather than
-    a parameter on it — _safe_module is also used by the single-check
-    dispatch further down in this file, which this retry behavior should
-    not affect. Only used here, in run_scan()'s own task dict.
+    A separate function from _safe_module (not a parameter on it) because
+    _safe_module is also used by the single-check dispatch further down,
+    which this retry behavior should not affect — only used in run_scan()'s
+    own task dict.
 
-    Includes abuseipdb, virustotal, and http_availability as of this
-    round — an earlier version of this docstring assumed those three
-    already had enough internal resilience (their own per-request/429
-    retry logic) to not need this. Verified directly that assumption was
-    wrong: their internal retries only cover a slow-but-responding
-    request (e.g. a 429), not the whole call hanging until the *outer*
-    with_timeout() budget expires under real concurrent batch load — which
-    is exactly what was observed for several targets in a 10-target Deep
-    batch. An outer retry after a fresh delay is a different, additive
-    layer, not a redundant one. virustotal keeps only a single retry
-    (default retry_delays) since each attempt already costs ~16s of
-    proactive rate-limit pacing — doubling that further has a worse
-    cost/benefit ratio than for the other, cheaper modules.
-
-    Still deliberately NOT applied to the long-running aggressive modules
-    (subdomains, directories, email_gather) or to port_scan — doubling
-    those risks exceeding the full-scan-batch orchestrator's own
-    per-target ceiling, and port_scan now returns its real partial results
-    on its own internal timeout (see port_scanner.py) rather than needing
-    a whole-scan redo.
+    Not applied to the long-running aggressive modules (subdomains,
+    directories, email_gather) or port_scan — doubling those risks
+    exceeding the batch orchestrator's per-target ceiling, and port_scan
+    already returns real partial results on its own internal timeout.
     """
     result = await _safe_module(coro_factory(), timeout_key, module_name)
     original_note = None
@@ -497,14 +467,10 @@ async def _safe_module_with_retry(
             break
         if original_note is None:
             original_note = result.get("error_message") or f"status: {result.get('status')}"
-        # A delay before retrying, not an instant retry — verified directly
-        # against a real failure (slack.com's WHOIS returning "not_found"
-        # twice in a row during a real batch run, then succeeding 3/3 times
-        # when tested standalone moments later): an immediate retry can
-        # land in the exact same contention window that caused the first
-        # failure (this module is one of several concurrent targets' many
-        # modules all competing at once), so it doesn't actually improve
-        # the odds. A pause lets that contention move past its peak.
+        # A delay before retrying, not an instant retry — an immediate
+        # retry can land in the same resource-contention window that
+        # caused the first failure, so it doesn't actually improve the
+        # odds. A pause lets that contention move past its peak.
         await asyncio.sleep(delay)
         result = await _safe_module(coro_factory(), timeout_key, module_name)
     if original_note is not None and isinstance(result, dict):
@@ -576,21 +542,12 @@ async def run_scan(
         raise HTTPException(status_code=400, detail=str(e))
 
     if module is None and resolved.get("is_domain") and not resolved.get("ip"):
-        # A failure right here cascades far worse than any individual
-        # module's own failure: every IP-dependent module below
-        # (geo_ip, ssl, shodan, abuseipdb, port_scan, reverse_dns,
-        # cloud_provider — 7 modules) inherits "no IP" and has nothing
-        # left to retry against. Verified directly (a 10-target Deep
-        # batch): resolve_target() — which already tries dnspython,
-        # Google/Cloudflare DNS, and socket.gethostbyname sequentially —
-        # still failed outright, once, for a definitely-registered,
-        # definitely-resolvable domain (salesforce.com), taking out 7
-        # otherwise-healthy modules in one shot on a run with heavy
-        # concurrent DNS load from other targets. One retry here, after
-        # a short delay, is far higher-leverage than retrying each of
-        # those 7 modules individually after they've already inherited
-        # "no IP". Scoped to module is None (full scans, solo or
-        # batched) — never affects single-module-check timing/behavior.
+        # A failure right here cascades into every IP-dependent module
+        # below (geo_ip, ssl, shodan, abuseipdb, port_scan, reverse_dns,
+        # cloud_provider), each inheriting "no IP" with nothing left to
+        # retry against. One retry here is cheaper than retrying each of
+        # those individually. Scoped to module is None (full scans, solo
+        # or batched) — never affects single-module-check behavior.
         await asyncio.sleep(2.0)
         try:
             resolved = await resolve_target(target)
@@ -625,23 +582,20 @@ async def run_scan(
     )
 
     # Three retries (2s, 5s, then 10s) for the cheap, single-external-call
-    # modules — verified directly that even two retries can still both
-    # land badly: a live batch had shodan_intel and whois both exhaust
-    # this budget on discord.com and still fail, then work perfectly on a
-    # fresh call moments later — proving the failures were real but
-    # short-lived, just outlasting a 2s+5s retry window. A third attempt
-    # with a longer final backoff gives a genuinely brief blip more room
-    # to clear without meaningfully risking the per-target time budget:
-    # worst case this adds ~17s to a single module's own timeout, on a
-    # target whose overall Deep-mode budget is 240s, and it only fires at
-    # all when a module is already failing.
+    # modules — two retries can still both land badly on a genuinely
+    # brief blip. A third attempt with a longer final backoff gives that
+    # more room to clear, at the cost of ~17s worst case, and only fires
+    # when a module is already failing.
     _CHEAP_RETRY_DELAYS = (2.0, 5.0, 10.0)
 
     tasks: dict[str, Any] = {
         "geo_ip": _safe_module_with_retry(lambda: geo_ip.lookup(ip_address), "geo_ip", "GeoIP", retry_delays=_CHEAP_RETRY_DELAYS) if ip_address else asyncio.sleep(0, result=ip_resolution_error),
         "http_headers": _safe_module(http_headers.fetch(target), "http_headers", "HTTP headers"),
         "ssl_certificate": _safe_module_with_retry(lambda: ssl_check.get_certificate(target), "ssl", "SSL check", retry_delays=_CHEAP_RETRY_DELAYS),
-        "web_technologies": _safe_module(web_tech.detect(target), "web_tech", "Web tech detection"),
+        # JS-runtime version detection (headless browser pass) only for
+        # deep/detailed — fast/standard stay purely passive/HTTP-based, same
+        # split already drawn for aggressive/reputation modules above.
+        "web_technologies": _safe_module(web_tech.detect(target, enable_js_detection=str(mode).strip().lower() in ("deep", "detailed")), "web_tech", "Web tech detection"),
         "http_availability": _safe_module_with_retry(lambda: http_availability.check(target), "http_availability", "HTTP Availability"),
         "shodan_intel": _safe_module_with_retry(lambda: shodan_intel.lookup(ip_address), "shodan", "Shodan Intel", retry_delays=_CHEAP_RETRY_DELAYS) if ip_address else asyncio.sleep(0, result=ip_resolution_error),
 
@@ -701,7 +655,24 @@ async def run_scan(
     if module:
         if module in ("standalone_port_scanner", "port_scanner", "port_scan"):
             chosen_range = port_range or "top100"
-            max_timeout = 360 if str(chosen_range).lower() in ("1-65535", "full", "65535") else 120
+            # Must stay >= port_scanner.scan()'s own internal overall_timeout
+            # per mode (TIMEOUTS["port_scan_fast"/"port_scan_detailed"], plus
+            # its own self-adjustment) with real margin above it — otherwise
+            # this outer with_timeout() wins the race and force-cancels the
+            # scan before scan()'s own graceful partial-results-on-timeout
+            # path (run_bounded, see modules/port_scanner.py) ever gets to
+            # run. "1-1024" was previously capped at 120s here against an
+            # internal 300s budget (port_scan_detailed) — a real, most-of-
+            # the-time-latent mismatch depending on how filtered the target
+            # is; "top100" was an exact 120==120 tie with zero margin. Only
+            # "1-65535" already had real headroom (360 outer vs 240 inner).
+            chosen_range_lower = str(chosen_range).lower()
+            if chosen_range_lower in ("1-65535", "full", "65535"):
+                max_timeout = 360
+            elif chosen_range_lower in ("1-1024", "1000", "detailed"):
+                max_timeout = 330
+            else:
+                max_timeout = 150
             tasks = {
                 module: with_timeout(
                     port_scanner.scan(ip_address, mode=chosen_range, target=target),
@@ -1153,6 +1124,7 @@ class SubdomainBatchRequest(BaseModel):
     subdomains: list[str]
     mode: str = "detailed"
     max_concurrent: int = 10
+    include_reputation: bool = True
     abuseipdb_api_key: str | None = None
     virustotal_api_key: str | None = None
 
@@ -1177,6 +1149,14 @@ class SubdomainBatchRequest(BaseModel):
         # each concurrent target can spawn OS subprocesses and hit rate-limited
         # APIs. Same ceiling full_scan_batch.py uses for its own deep/detailed
         # concurrency (MAX_CONCURRENCY["detailed"] = 5), for the same reason.
+        # A supervised trial at concurrency=16 (2026-09-10, same 29-subdomain
+        # set as a concurrency=5 baseline) measured a real, additional reason
+        # to keep this cap: 2 of 29 subdomains hit a genuine "Database update
+        # timeout" — SQLite's single-writer lock under that many concurrent
+        # status-write attempts — leaving them stuck at "running" forever
+        # with their result data silently lost. Wall time was ~2.3x faster,
+        # but at the cost of that data loss, so this isn't a validated new
+        # default; reverted back to 5 after the trial.
         if self.mode == "detailed" and self.max_concurrent > 5:
             self.max_concurrent = 5
         return self
@@ -1231,7 +1211,8 @@ async def start_subdomain_batch(
             mode=request.mode,
             max_concurrent=request.max_concurrent,
             abuseipdb_api_key=request.abuseipdb_api_key,
-            virustotal_api_key=request.virustotal_api_key
+            virustotal_api_key=request.virustotal_api_key,
+            include_reputation=request.include_reputation
         )
     )
     running_batch_tasks[batch.id] = task

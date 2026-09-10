@@ -4,6 +4,13 @@ export const BackgroundScansContext = createContext()
 
 const API_BASE = import.meta.env.DEV ? '/api' : ''
 
+// A batch scan that was stopped (cancelled) or errored out (failed) is just
+// as finished as one that ran to completion — all three mean "stop polling,
+// stop showing this as active." Only checking for 'completed' here (the
+// original bug) left a stopped scan's widget stuck reading "Running in
+// background" forever, since nothing ever removed it from tracking.
+const TERMINAL_STATUSES = ['completed', 'cancelled', 'failed']
+
 export function BackgroundScansProvider({ children }) {
   const [backgroundScans, setBackgroundScans] = useState({})
   const [expandedScanId, setExpandedScanId] = useState(null)
@@ -91,11 +98,11 @@ export function BackgroundScansProvider({ children }) {
   useEffect(() => {
     const timer = setTimeout(() => {
       setProgressData(prev => {
-        const hasCompleted = Object.values(prev).some(p => p.status === 'completed')
-        if (hasCompleted) {
+        const hasTerminal = Object.values(prev).some(p => TERMINAL_STATUSES.includes(p.status))
+        if (hasTerminal) {
           const filtered = { ...prev }
           Object.keys(filtered).forEach(batchId => {
-            if (filtered[batchId].status === 'completed') {
+            if (TERMINAL_STATUSES.includes(filtered[batchId].status)) {
               removeBackgroundScan(batchId)
             }
           })

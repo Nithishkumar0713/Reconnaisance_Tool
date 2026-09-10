@@ -12,15 +12,11 @@ place, not just assumed).
 
 HTTP version is reported for port 443 using a direct TLS ALPN probe — the
 same mechanism a real browser uses to decide HTTP/2 vs HTTP/1.1 during the
-TLS handshake, before any HTTP request is even sent. This was a deliberate
-choice after testing: `curl --http2` is unavailable on this system (neither
-Git's nor Windows' bundled curl.exe has HTTP/2 compiled in — verified
-directly), and aiohttp's own client only ever speaks HTTP/1.1 on the wire,
-so relying on either would misreport "HTTP/1.1" even for servers that fully
-support HTTP/2. The raw ALPN probe was verified directly against known
-HTTP/2 sites (google.com, github.com, cloudflare.com — all correctly
-returned 'h2') and a known HTTP/1.1-only site (testfire.net — correctly
-returned no ALPN protocol).
+TLS handshake, before any HTTP request is even sent. This is a deliberate
+choice: neither Git's nor Windows' bundled curl.exe has HTTP/2 compiled
+in, and aiohttp's own client only ever speaks HTTP/1.1 on the wire, so
+relying on either would misreport "HTTP/1.1" even for servers that fully
+support HTTP/2.
 """
 
 import asyncio
@@ -200,12 +196,11 @@ def _url_host(target: str) -> str:
     """Formats `target` for embedding directly in a URL string. A bare IPv6
     literal (e.g. "2404:6800:4007:808::200e") is only valid on the wire —
     inside a URL it's ambiguous with the ":port" separator, so RFC 3986
-    requires it be wrapped in brackets ("[2404:...::200e]"). Verified
-    directly: without this, yarl/aiohttp raises "Invalid URL: port can't be
-    converted to integer" on any raw IPv6 target, which is a legitimate,
-    reachable input here (classify_non_public_ip and is_valid_input both
-    already accept public IPv6 addresses). Domains and IPv4 literals pass
-    through unchanged."""
+    requires it be wrapped in brackets ("[2404:...::200e]"). Without this,
+    yarl/aiohttp raises "Invalid URL: port can't be converted to integer"
+    on any raw IPv6 target, which is a legitimate, reachable input here
+    (classify_non_public_ip and is_valid_input both already accept public
+    IPv6 addresses). Domains and IPv4 literals pass through unchanged."""
     try:
         ip_obj = ipaddress.ip_address(target)
     except ValueError:
@@ -481,16 +476,12 @@ _RETRY_WORTHY_ERROR_CODES = {ScanError.FIREWALL_FILTERED, ScanError.SERVER_DISCO
 async def _check_port_verified(target: str, port: int, use_ssl: bool) -> dict[str, Any]:
     """Wraps _check_port with a single retry for genuinely ambiguous,
     single-attempt-only outcomes: the error codes in
-    _RETRY_WORTHY_ERROR_CODES, plus a WAF/bot-protection block. The WAF case
-    was added after directly observing a real target
-    (licgyanpeeth.licindia.in, behind Cloudflare) flip between blocked and
-    accessible across back-to-back identical requests with nothing else
-    changing — three fresh fetches of the same URL, no cookies, same
-    User-Agent, returned 403/403/200. Cloudflare's bot-scoring is
-    probabilistic, not a hard yes/no, so a single blocked attempt doesn't
-    reliably mean the site is really unreachable. Mirrors the same
-    retry-on-ambiguous-result strategy port_scanner.py already uses and has
-    proven out."""
+    _RETRY_WORTHY_ERROR_CODES, plus a WAF/bot-protection block. Some
+    Cloudflare-fronted targets flip between blocked and accessible across
+    back-to-back identical requests since bot-scoring is probabilistic,
+    not a hard yes/no, so a single blocked attempt doesn't reliably mean
+    the site is really unreachable. Mirrors the same retry-on-ambiguous-
+    result strategy port_scanner.py uses."""
     result = await _check_port(target, port, use_ssl)
 
     if use_ssl and result.get("error_code") == ScanError.SSL_HANDSHAKE_FAILED:

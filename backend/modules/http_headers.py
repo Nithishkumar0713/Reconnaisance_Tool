@@ -22,11 +22,11 @@ def _url_host(target: str) -> str:
     """Formats `target` for embedding directly in a URL string. A bare IPv6
     literal (e.g. "2404:6800:4007:808::200e") is only valid on the wire —
     inside a URL it's ambiguous with the ":port" separator, so RFC 3986
-    requires it be wrapped in brackets ("[2404:...::200e]"). Verified
-    directly: without this, curl exits with code 3 ("URL malformed") on any
-    raw IPv6 target, which is a legitimate, reachable input here
-    (classify_non_public_ip/is_valid_input both already accept public IPv6
-    addresses). Domains and IPv4 literals pass through unchanged."""
+    requires it be wrapped in brackets ("[2404:...::200e]"). Without this,
+    curl exits with code 3 ("URL malformed") on any raw IPv6 target, which
+    is a legitimate, reachable input here (classify_non_public_ip/
+    is_valid_input both already accept public IPv6 addresses). Domains and
+    IPv4 literals pass through unchanged."""
     try:
         ip_obj = ipaddress.ip_address(target)
     except ValueError:

@@ -143,13 +143,10 @@ class FullScanBatchRunner:
 
     async def _record_scan_history(self, target: str, result: dict[str, Any]) -> None:
         """Writes a ScanHistory row for a completed target, same table/shape
-        the single-target /scan endpoint writes to — without this, a
-        full-scan-batch's results never showed up in the user's scan
-        history at all (verified: only single-target scans and
-        single-module checks were ever written there, since both go
-        through /scan; this orchestrator calls run_scan() directly as a
-        function, bypassing that endpoint and its history write
-        entirely)."""
+        the single-target /scan endpoint writes to. Without this, a
+        full-scan-batch's results never show up in the user's scan
+        history — this orchestrator calls run_scan() directly as a
+        function, bypassing /scan and its history write entirely."""
         def _db_write():
             try:
                 with get_db_session() as db:
